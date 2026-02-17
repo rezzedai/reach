@@ -16,6 +16,7 @@ import {
   createTag,
   deleteTag,
   addTagToProspects,
+  removeTagFromProspects,
 } from '@/lib/db/queries';
 import type { Prospect, ProspectStatus, MessageStatus } from '@/lib/types';
 
@@ -94,6 +95,11 @@ export async function deleteTagAction(id: string) {
 
 export async function addTagAction(prospectIds: string[], tagId: string) {
   await addTagToProspects(prospectIds, tagId);
+  revalidatePath('/prospects');
+}
+
+export async function removeTagAction(prospectIds: string[], tagId: string) {
+  await removeTagFromProspects(prospectIds, tagId);
   revalidatePath('/prospects');
 }
 

@@ -48,9 +48,13 @@ interface ProspectDetailClientProps {
     lastName: string;
     title: string;
     company: string;
+    companySize: string;
     industry: string;
     location: string;
     linkedinUrl: string;
+    connectedOn: string;
+    email: string;
+    phone: string;
     notes: string;
     status: string;
   };
@@ -145,12 +149,21 @@ export function ProspectDetailClient({ prospect, sequence }: ProspectDetailClien
                 onBlur={(e) => handleUpdate('title', e.target.value)}
               />
             </div>
-            <div>
-              <Label>Company</Label>
-              <Input
-                defaultValue={prospect.company}
-                onBlur={(e) => handleUpdate('company', e.target.value)}
-              />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Company</Label>
+                <Input
+                  defaultValue={prospect.company}
+                  onBlur={(e) => handleUpdate('company', e.target.value)}
+                />
+              </div>
+              <div>
+                <Label>Company Size</Label>
+                <Input
+                  defaultValue={prospect.companySize}
+                  onBlur={(e) => handleUpdate('companySize', e.target.value)}
+                />
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -168,12 +181,37 @@ export function ProspectDetailClient({ prospect, sequence }: ProspectDetailClien
                 />
               </div>
             </div>
-            <div>
-              <Label>LinkedIn URL</Label>
-              <Input
-                defaultValue={prospect.linkedinUrl}
-                onBlur={(e) => handleUpdate('linkedinUrl', e.target.value)}
-              />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Email</Label>
+                <Input
+                  defaultValue={prospect.email}
+                  onBlur={(e) => handleUpdate('email', e.target.value)}
+                />
+              </div>
+              <div>
+                <Label>Phone</Label>
+                <Input
+                  defaultValue={prospect.phone}
+                  onBlur={(e) => handleUpdate('phone', e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>LinkedIn URL</Label>
+                <Input
+                  defaultValue={prospect.linkedinUrl}
+                  onBlur={(e) => handleUpdate('linkedinUrl', e.target.value)}
+                />
+              </div>
+              <div>
+                <Label>Connected On</Label>
+                <Input
+                  defaultValue={prospect.connectedOn}
+                  disabled
+                />
+              </div>
             </div>
             <div>
               <Label>Notes</Label>

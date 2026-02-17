@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
-import { getUserByApiKey, createProspects } from '@/lib/db/queries';
+import { getUserByApiKey, createProspects, getProspects } from '@/lib/db/queries';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -86,34 +86,45 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const prospectData = connections.map((conn) => {
-      const { firstName, lastName } = splitName(conn.name);
-      const { jobTitle, company } = parseTitle(conn.title || '');
+    // Deduplicate against existing prospects by LinkedIn URL
+    const existing = await getProspects(userId);
+    const existingUrls = new Set(
+      existing.map((p) => p.linkedinUrl).filter(Boolean)
+    );
 
-      return {
-        firstName,
-        lastName,
-        title: jobTitle,
-        company,
-        companySize: '',
-        industry: '',
-        location: '',
-        linkedinUrl: conn.url || '',
-        connectedOn: conn.connectedOn || '',
-        email: '',
-        phone: '',
-        notes: '',
-        status: 'new' as const,
-        importedAt: new Date().toISOString(),
-      };
-    });
+    const prospectData = connections
+      .filter((conn) => !conn.url || !existingUrls.has(conn.url))
+      .map((conn) => {
+        const { firstName, lastName } = splitName(conn.name);
+        const { jobTitle, company } = parseTitle(conn.title || '');
 
-    const created = await createProspects(userId, prospectData);
+        return {
+          firstName,
+          lastName,
+          title: jobTitle,
+          company,
+          companySize: '',
+          industry: '',
+          location: '',
+          linkedinUrl: conn.url || '',
+          connectedOn: conn.connectedOn || '',
+          email: '',
+          phone: '',
+          notes: '',
+          status: 'new' as const,
+          importedAt: new Date().toISOString(),
+        };
+      });
+
+    const duplicates = connections.length - prospectData.length;
+    const created = prospectData.length > 0
+      ? await createProspects(userId, prospectData)
+      : [];
 
     return NextResponse.json({
       added: created.length,
-      duplicates: 0,
-      message: `Imported ${created.length} connections.`,
+      duplicates,
+      message: `Imported ${created.length} connections.${duplicates > 0 ? ` ${duplicates} duplicates skipped.` : ''}`,
     }, { headers: CORS_HEADERS });
   } catch {
     return NextResponse.json(

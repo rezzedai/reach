@@ -235,9 +235,9 @@ function GenerateContent({ prospects }: GenerateClientProps) {
 
           {generating && (
             <div className="space-y-2">
-              <Progress value={(progress.current / progress.total) * 100} />
+              <Progress value={undefined} className="animate-pulse" />
               <p className="text-sm text-muted-foreground">
-                Generating {progress.current} of {progress.total}...
+                Generating sequences for {progress.total} prospect{progress.total !== 1 ? 's' : ''}...
               </p>
             </div>
           )}
