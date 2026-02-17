@@ -143,6 +143,102 @@ export async function deleteSequence(userId: string, id: string) {
     .where(and(eq(sequences.userId, userId), eq(sequences.id, id)));
 }
 
+// ── Dashboard ──
+
+export async function getDashboardData(userId: string) {
+  const allSequences = await db
+    .select()
+    .from(sequences)
+    .where(eq(sequences.userId, userId));
+
+  const allProspects = await db
+    .select()
+    .from(prospects)
+    .where(eq(prospects.userId, userId));
+
+  const prospectMap = new Map(allProspects.map((p) => [p.id, p]));
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const sevenDaysAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+  const readyToSend: { prospectId: string; name: string }[] = [];
+  const followUpsDue: { prospectId: string; name: string; dueDate: string }[] = [];
+  const awaitingResponse: { prospectId: string; name: string; sentAt: string }[] = [];
+  const recentlyResponded: { prospectId: string; name: string; respondedAt: string }[] = [];
+
+  let sentToday = 0;
+  let totalSent = 0;
+  let totalResponded = 0;
+
+  for (const seq of allSequences) {
+    const msgs = seq.messages as { day: number; type: string; subject: string | null; body: string; status?: string; sentAt?: string | null; respondedAt?: string | null }[];
+    const prospect = prospectMap.get(seq.prospectId);
+    if (!prospect) continue;
+
+    const name = `${prospect.firstName} ${prospect.lastName}`.trim();
+
+    // Count stats
+    for (const m of msgs) {
+      if (m.status === 'sent' || m.status === 'responded') {
+        totalSent++;
+        if (m.sentAt && new Date(m.sentAt) >= today) sentToday++;
+      }
+      if (m.status === 'responded') totalResponded++;
+    }
+
+    // Check first message pending = ready to send
+    const firstMsg = msgs[0];
+    if (firstMsg && (!firstMsg.status || firstMsg.status === 'pending')) {
+      readyToSend.push({ prospectId: prospect.id, name });
+    }
+
+    // Follow-ups due
+    if (prospect.nextFollowUpAt && new Date(prospect.nextFollowUpAt) <= now) {
+      followUpsDue.push({
+        prospectId: prospect.id,
+        name,
+        dueDate: prospect.nextFollowUpAt,
+      });
+    }
+
+    // Awaiting response: has a sent message with no responded message after it
+    const lastSent = [...msgs].reverse().find((m) => m.status === 'sent');
+    if (lastSent && !msgs.some((m) => m.status === 'responded')) {
+      awaitingResponse.push({
+        prospectId: prospect.id,
+        name,
+        sentAt: lastSent.sentAt || '',
+      });
+    }
+
+    // Recently responded
+    const responded = msgs.filter(
+      (m) => m.status === 'responded' && m.respondedAt && new Date(m.respondedAt) >= sevenDaysAgo
+    );
+    if (responded.length > 0) {
+      recentlyResponded.push({
+        prospectId: prospect.id,
+        name,
+        respondedAt: responded[responded.length - 1].respondedAt!,
+      });
+    }
+  }
+
+  const responseRate = totalSent > 0 ? Math.round((totalResponded / totalSent) * 100) : 0;
+
+  return {
+    stats: {
+      activeSequences: allSequences.length,
+      sentToday,
+      responseRate,
+    },
+    readyToSend,
+    followUpsDue,
+    awaitingResponse,
+    recentlyResponded,
+  };
+}
+
 // ── Outreach Tracking ──
 
 export async function updateMessageStatus(
