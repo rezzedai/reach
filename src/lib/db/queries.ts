@@ -1,7 +1,7 @@
 import { db } from '@/lib/db';
 import { prospects, sequences, users } from './schema';
-import { eq, and, inArray } from 'drizzle-orm';
-import type { Prospect, Sequence } from '@/lib/types';
+import { eq, and, inArray, lte, isNull, isNotNull, gte, sql } from 'drizzle-orm';
+import type { Prospect, Sequence, MessageStatus } from '@/lib/types';
 
 // ── Prospects ──
 
@@ -141,6 +141,64 @@ export async function deleteSequence(userId: string, id: string) {
   return db
     .delete(sequences)
     .where(and(eq(sequences.userId, userId), eq(sequences.id, id)));
+}
+
+// ── Outreach Tracking ──
+
+export async function updateMessageStatus(
+  userId: string,
+  sequenceId: string,
+  messageIndex: number,
+  status: MessageStatus
+) {
+  const rows = await db
+    .select()
+    .from(sequences)
+    .where(and(eq(sequences.userId, userId), eq(sequences.id, sequenceId)));
+
+  const seq = rows[0];
+  if (!seq) return null;
+
+  const messages = [...(seq.messages as Sequence['messages'])];
+  const msg = messages[messageIndex];
+  if (!msg) return null;
+
+  const now = new Date().toISOString();
+  msg.status = status;
+  if (status === 'sent') msg.sentAt = now;
+  if (status === 'responded') msg.respondedAt = now;
+
+  await db
+    .update(sequences)
+    .set({ messages })
+    .where(eq(sequences.id, sequenceId));
+
+  // Update prospect timestamps
+  const lastSent = messages
+    .filter((m) => m.status === 'sent' || m.status === 'responded')
+    .map((m) => m.sentAt)
+    .filter(Boolean)
+    .sort()
+    .pop();
+
+  const nextPending = messages.find((m) => !m.status || m.status === 'pending');
+  let nextFollowUp: string | null = null;
+  if (lastSent && nextPending) {
+    const sentDate = new Date(lastSent);
+    const daysUntilNext = nextPending.day - (msg.day || 0);
+    sentDate.setDate(sentDate.getDate() + Math.max(daysUntilNext, 1));
+    nextFollowUp = sentDate.toISOString();
+  }
+
+  await db
+    .update(prospects)
+    .set({
+      lastContactedAt: lastSent || undefined,
+      nextFollowUpAt: nextFollowUp,
+    })
+    .where(and(eq(prospects.userId, userId), eq(prospects.id, seq.prospectId)));
+
+  return { ...seq, messages };
 }
 
 // ── Users / API Keys ──

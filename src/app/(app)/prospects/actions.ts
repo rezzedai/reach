@@ -7,8 +7,9 @@ import {
   updateProspect,
   updateProspectStatus,
   deleteProspects,
+  updateMessageStatus,
 } from '@/lib/db/queries';
-import type { Prospect, ProspectStatus } from '@/lib/types';
+import type { Prospect, ProspectStatus, MessageStatus } from '@/lib/types';
 
 export async function addProspectsAction(data: Omit<Prospect, 'id'>[]) {
   const user = await getRequiredUser();
@@ -39,4 +40,18 @@ export async function deleteProspectsAction(ids: string[]) {
   await deleteProspects(user.id!, ids);
   revalidatePath('/prospects');
   revalidatePath('/');
+}
+
+export async function updateMessageStatusAction(
+  sequenceId: string,
+  messageIndex: number,
+  status: MessageStatus
+) {
+  const user = await getRequiredUser();
+  const result = await updateMessageStatus(user.id!, sequenceId, messageIndex, status);
+  if (!result) throw new Error('Sequence or message not found');
+  revalidatePath(`/prospects/${result.prospectId}`);
+  revalidatePath('/prospects');
+  revalidatePath('/dashboard');
+  return result;
 }
