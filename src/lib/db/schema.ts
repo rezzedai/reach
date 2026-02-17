@@ -90,6 +90,8 @@ export const prospects = pgTable('prospects', {
   importedAt: timestamp('importedAt', { mode: 'string' })
     .notNull()
     .$defaultFn(() => new Date().toISOString()),
+  lastContactedAt: timestamp('lastContactedAt', { mode: 'string' }),
+  nextFollowUpAt: timestamp('nextFollowUpAt', { mode: 'string' }),
 });
 
 export const sequences = pgTable('sequences', {
@@ -116,6 +118,6 @@ export const sequences = pgTable('sequences', {
   generationTime: text('generationTime').notNull().default(''),
   demo: boolean('demo').notNull().default(false),
   messages: jsonb('messages').$type<
-    { day: number; type: string; subject: string | null; body: string }[]
+    { day: number; type: string; subject: string | null; body: string; status?: 'pending' | 'sent' | 'responded' | 'skipped'; sentAt?: string | null; respondedAt?: string | null }[]
   >().notNull(),
 });

@@ -15,13 +15,20 @@ export interface Prospect {
   notes: string;
   status: ProspectStatus;
   importedAt: string;
+  lastContactedAt?: string | null;
+  nextFollowUpAt?: string | null;
 }
+
+export type MessageStatus = 'pending' | 'sent' | 'responded' | 'skipped';
 
 export interface Message {
   day: number;
   type: string;
   subject: string | null;
   body: string;
+  status?: MessageStatus;
+  sentAt?: string | null;
+  respondedAt?: string | null;
 }
 
 export interface Sequence {
