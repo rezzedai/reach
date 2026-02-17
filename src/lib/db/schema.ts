@@ -150,3 +150,29 @@ export const prospectCampaigns = pgTable(
   },
   (t) => [primaryKey({ columns: [t.prospectId, t.campaignId] })]
 );
+
+// ── Tags ──
+
+export const tags = pgTable('tags', {
+  id: text('id')
+    .primaryKey()
+    .$defaultFn(() => nanoid(10)),
+  userId: text('userId')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  color: text('color').notNull().default('gray'),
+});
+
+export const prospectTags = pgTable(
+  'prospect_tags',
+  {
+    prospectId: text('prospectId')
+      .notNull()
+      .references(() => prospects.id, { onDelete: 'cascade' }),
+    tagId: text('tagId')
+      .notNull()
+      .references(() => tags.id, { onDelete: 'cascade' }),
+  },
+  (t) => [primaryKey({ columns: [t.prospectId, t.tagId] })]
+);

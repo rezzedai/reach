@@ -1,5 +1,5 @@
 import { db } from '@/lib/db';
-import { prospects, sequences, users, campaigns, prospectCampaigns } from './schema';
+import { prospects, sequences, users, campaigns, prospectCampaigns, tags, prospectTags } from './schema';
 import { eq, and, inArray, lte, isNull, isNotNull, gte, sql } from 'drizzle-orm';
 import type { Prospect, Sequence, MessageStatus } from '@/lib/types';
 
@@ -369,6 +369,50 @@ export async function getProspectCampaigns(userId: string) {
     .from(prospectCampaigns)
     .innerJoin(campaigns, eq(prospectCampaigns.campaignId, campaigns.id))
     .where(eq(campaigns.userId, userId));
+}
+
+// ── Tags ──
+
+export async function getTags(userId: string) {
+  return db.select().from(tags).where(eq(tags.userId, userId));
+}
+
+export async function createTag(userId: string, data: { name: string; color: string }) {
+  const rows = await db
+    .insert(tags)
+    .values({ userId, name: data.name, color: data.color })
+    .returning();
+  return rows[0];
+}
+
+export async function deleteTag(userId: string, id: string) {
+  return db.delete(tags).where(and(eq(tags.userId, userId), eq(tags.id, id)));
+}
+
+export async function addTagToProspects(prospectIds: string[], tagId: string) {
+  if (prospectIds.length === 0) return;
+  const values = prospectIds.map((prospectId) => ({ prospectId, tagId }));
+  await db.insert(prospectTags).values(values).onConflictDoNothing();
+}
+
+export async function removeTagFromProspects(prospectIds: string[], tagId: string) {
+  if (prospectIds.length === 0) return;
+  await db
+    .delete(prospectTags)
+    .where(and(inArray(prospectTags.prospectId, prospectIds), eq(prospectTags.tagId, tagId)));
+}
+
+export async function getProspectTags(userId: string) {
+  return db
+    .select({
+      prospectId: prospectTags.prospectId,
+      tagId: prospectTags.tagId,
+      tagName: tags.name,
+      tagColor: tags.color,
+    })
+    .from(prospectTags)
+    .innerJoin(tags, eq(prospectTags.tagId, tags.id))
+    .where(eq(tags.userId, userId));
 }
 
 // ── Users / API Keys ──

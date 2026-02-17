@@ -44,6 +44,29 @@ export interface ProspectCampaign {
   campaignId: string;
 }
 
+export interface Tag {
+  id: string;
+  userId?: string;
+  name: string;
+  color: string;
+}
+
+export interface ProspectTag {
+  prospectId: string;
+  tagId: string;
+}
+
+export const TAG_COLORS = [
+  { name: 'gray', bg: 'bg-gray-100', text: 'text-gray-800' },
+  { name: 'red', bg: 'bg-red-100', text: 'text-red-800' },
+  { name: 'orange', bg: 'bg-orange-100', text: 'text-orange-800' },
+  { name: 'yellow', bg: 'bg-yellow-100', text: 'text-yellow-800' },
+  { name: 'green', bg: 'bg-green-100', text: 'text-green-800' },
+  { name: 'blue', bg: 'bg-blue-100', text: 'text-blue-800' },
+  { name: 'purple', bg: 'bg-purple-100', text: 'text-purple-800' },
+  { name: 'pink', bg: 'bg-pink-100', text: 'text-pink-800' },
+] as const;
+
 export interface Sequence {
   id: string;
   prospectId: string;

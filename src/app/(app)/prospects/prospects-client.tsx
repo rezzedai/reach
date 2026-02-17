@@ -29,7 +29,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Trash2, ChevronDown, ChevronUp, ExternalLink, Search, CheckSquare, XSquare, ArrowUp, ArrowDown, Download, Plus, FolderPlus, Filter, X } from 'lucide-react';
+import { Trash2, ChevronDown, ChevronUp, ExternalLink, Search, CheckSquare, XSquare, ArrowUp, ArrowDown, Download, Plus, FolderPlus, Filter, X, Tag } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -38,7 +38,8 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import type { Prospect, ProspectStatus, Campaign } from '@/lib/types';
+import type { Prospect, ProspectStatus, Campaign, Tag as TagType } from '@/lib/types';
+import { TAG_COLORS } from '@/lib/types';
 import { toast } from 'sonner';
 import {
   addProspectsAction,
@@ -46,6 +47,8 @@ import {
   deleteProspectsAction,
   createCampaignAction,
   addToCampaignAction,
+  createTagAction,
+  addTagAction,
 } from './actions';
 
 const STATUS_COLORS: Record<ProspectStatus, string> = {
@@ -60,6 +63,13 @@ interface ProspectsClientProps {
   sequenceProspectIds: string[];
   campaigns: Campaign[];
   prospectCampaigns: { prospectId: string; campaignId: string; campaignName: string }[];
+  tags: TagType[];
+  prospectTags: { prospectId: string; tagId: string; tagName: string; tagColor: string }[];
+}
+
+function getTagColorClasses(color: string) {
+  const c = TAG_COLORS.find((tc) => tc.name === color);
+  return c ? `${c.bg} ${c.text}` : 'bg-gray-100 text-gray-800';
 }
 
 type SortColumn = 'name' | 'title' | 'company' | 'industry' | 'status' | 'connectedOn';
@@ -91,7 +101,7 @@ function csvEscape(value: string): string {
   return value;
 }
 
-export function ProspectsClient({ prospects, sequenceProspectIds, campaigns, prospectCampaigns }: ProspectsClientProps) {
+export function ProspectsClient({ prospects, sequenceProspectIds, campaigns, prospectCampaigns, tags: tagsList, prospectTags: prospectTagsList }: ProspectsClientProps) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -101,12 +111,16 @@ export function ProspectsClient({ prospects, sequenceProspectIds, campaigns, pro
   const [locationFilter, setLocationFilter] = useState<string>('all');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [tagFilter, setTagFilter] = useState<string>('all');
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [sortConfig, setSortConfig] = useState<SortConfig>(null);
   const [isPending, startTransition] = useTransition();
   const [newCampaignOpen, setNewCampaignOpen] = useState(false);
   const [newCampaignName, setNewCampaignName] = useState('');
   const [newCampaignDesc, setNewCampaignDesc] = useState('');
+  const [newTagOpen, setNewTagOpen] = useState(false);
+  const [newTagName, setNewTagName] = useState('');
+  const [newTagColor, setNewTagColor] = useState('blue');
 
   const seqSet = useMemo(() => new Set(sequenceProspectIds), [sequenceProspectIds]);
 
@@ -119,6 +133,16 @@ export function ProspectsClient({ prospects, sequenceProspectIds, campaigns, pro
     }
     return map;
   }, [prospectCampaigns]);
+
+  const prospectTagMap = useMemo(() => {
+    const map = new Map<string, { tagId: string; tagName: string; tagColor: string }[]>();
+    for (const pt of prospectTagsList) {
+      const list = map.get(pt.prospectId) || [];
+      list.push({ tagId: pt.tagId, tagName: pt.tagName, tagColor: pt.tagColor });
+      map.set(pt.prospectId, list);
+    }
+    return map;
+  }, [prospectTagsList]);
 
   const companies = useMemo(() => {
     const set = new Set(prospects.map((p) => p.company).filter(Boolean));
@@ -142,6 +166,10 @@ export function ProspectsClient({ prospects, sequenceProspectIds, campaigns, pro
       if (campaignFilter !== 'all') {
         const pcList = prospectCampaignMap.get(p.id) || [];
         if (!pcList.some((c) => c.campaignId === campaignFilter)) return false;
+      }
+      if (tagFilter !== 'all') {
+        const ptList = prospectTagMap.get(p.id) || [];
+        if (!ptList.some((t) => t.tagId === tagFilter)) return false;
       }
       if (industryFilter !== 'all' && p.industry !== industryFilter) return false;
       if (locationFilter !== 'all' && p.location !== locationFilter) return false;
@@ -174,7 +202,7 @@ export function ProspectsClient({ prospects, sequenceProspectIds, campaigns, pro
     }
 
     return result;
-  }, [prospects, search, statusFilter, companyFilter, campaignFilter, industryFilter, locationFilter, dateFrom, dateTo, prospectCampaignMap, sortConfig]);
+  }, [prospects, search, statusFilter, companyFilter, campaignFilter, tagFilter, industryFilter, locationFilter, dateFrom, dateTo, prospectCampaignMap, prospectTagMap, sortConfig]);
 
   const allSelected = filtered.length > 0 && filtered.every((p) => selected.has(p.id));
 
@@ -219,6 +247,7 @@ export function ProspectsClient({ prospects, sequenceProspectIds, campaigns, pro
     statusFilter !== 'all',
     companyFilter !== 'all',
     campaignFilter !== 'all',
+    tagFilter !== 'all',
     industryFilter !== 'all',
     locationFilter !== 'all',
     !!dateFrom,
@@ -231,6 +260,7 @@ export function ProspectsClient({ prospects, sequenceProspectIds, campaigns, pro
     setStatusFilter('all');
     setCompanyFilter('all');
     setCampaignFilter('all');
+    setTagFilter('all');
     setIndustryFilter('all');
     setLocationFilter('all');
     setDateFrom('');
@@ -292,6 +322,25 @@ export function ProspectsClient({ prospects, sequenceProspectIds, campaigns, pro
     });
   };
 
+  const handleCreateTag = () => {
+    if (!newTagName.trim()) return;
+    startTransition(async () => {
+      await createTagAction(newTagName.trim(), newTagColor);
+      toast.success(`Tag "${newTagName.trim()}" created`);
+      setNewTagName('');
+      setNewTagColor('blue');
+      setNewTagOpen(false);
+    });
+  };
+
+  const handleAddTag = (tagId: string) => {
+    const ids = Array.from(selected);
+    startTransition(async () => {
+      await addTagAction(ids, tagId);
+      toast.success(`Tagged ${ids.length} prospect(s)`);
+    });
+  };
+
   const handleImport = (newProspects: Prospect[]) => {
     startTransition(async () => {
       await addProspectsAction(newProspects);
@@ -345,6 +394,46 @@ export function ProspectsClient({ prospects, sequenceProspectIds, campaigns, pro
                   />
                 </div>
                 <Button onClick={handleCreateCampaign} disabled={!newCampaignName.trim() || isPending}>
+                  Create
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+          <Dialog open={newTagOpen} onOpenChange={setNewTagOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" size="sm">
+                <Tag className="mr-1 h-4 w-4" />
+                New Tag
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Create Tag</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-3">
+                <div>
+                  <Label>Name</Label>
+                  <Input
+                    value={newTagName}
+                    onChange={(e) => setNewTagName(e.target.value)}
+                    placeholder="Tag name"
+                  />
+                </div>
+                <div>
+                  <Label>Color</Label>
+                  <div className="flex flex-wrap gap-2 mt-1">
+                    {TAG_COLORS.map((tc) => (
+                      <button
+                        key={tc.name}
+                        type="button"
+                        className={`h-7 w-7 rounded-full ${tc.bg} border-2 ${newTagColor === tc.name ? 'border-foreground' : 'border-transparent'}`}
+                        onClick={() => setNewTagColor(tc.name)}
+                        title={tc.name}
+                      />
+                    ))}
+                  </div>
+                </div>
+                <Button onClick={handleCreateTag} disabled={!newTagName.trim() || isPending}>
                   Create
                 </Button>
               </div>
@@ -475,6 +564,24 @@ export function ProspectsClient({ prospects, sequenceProspectIds, campaigns, pro
               ))}
             </SelectContent>
           </Select>
+          {tagsList.length > 0 && (
+            <Select value={tagFilter} onValueChange={setTagFilter}>
+              <SelectTrigger className="w-[160px]">
+                <SelectValue placeholder="Tag" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Tags</SelectItem>
+                {tagsList.map((t) => (
+                  <SelectItem key={t.id} value={t.id}>
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className={`inline-block h-2 w-2 rounded-full ${getTagColorClasses(t.color).split(' ')[0]}`} />
+                      {t.name}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           <div className="flex items-center gap-2">
             <Label className="text-sm text-muted-foreground whitespace-nowrap">Connected</Label>
             <Input
@@ -525,6 +632,24 @@ export function ProspectsClient({ prospects, sequenceProspectIds, campaigns, pro
                 {campaigns.map((c) => (
                   <DropdownMenuItem key={c.id} onClick={() => handleAddToCampaign(c.id)}>
                     {c.name}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+          {tagsList.length > 0 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Tag className="mr-1 h-3 w-3" />
+                  Add Tag <ChevronDown className="ml-1 h-3 w-3" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                {tagsList.map((t) => (
+                  <DropdownMenuItem key={t.id} onClick={() => handleAddTag(t.id)}>
+                    <span className={`inline-block h-2 w-2 rounded-full mr-1.5 ${getTagColorClasses(t.color).split(' ')[0]}`} />
+                    {t.name}
                   </DropdownMenuItem>
                 ))}
               </DropdownMenuContent>
@@ -615,6 +740,11 @@ export function ProspectsClient({ prospects, sequenceProspectIds, campaigns, pro
                     {(prospectCampaignMap.get(prospect.id) || []).map((c) => (
                       <Badge key={c.campaignId} variant="outline" className="ml-1 text-xs">
                         {c.campaignName}
+                      </Badge>
+                    ))}
+                    {(prospectTagMap.get(prospect.id) || []).map((t) => (
+                      <Badge key={t.tagId} className={`ml-1 text-xs ${getTagColorClasses(t.tagColor)}`}>
+                        {t.tagName}
                       </Badge>
                     ))}
                   </TableCell>

@@ -13,6 +13,9 @@ import {
   deleteCampaign,
   addProspectsToCampaign,
   removeProspectsFromCampaign,
+  createTag,
+  deleteTag,
+  addTagToProspects,
 } from '@/lib/db/queries';
 import type { Prospect, ProspectStatus, MessageStatus } from '@/lib/types';
 
@@ -73,6 +76,24 @@ export async function addToCampaignAction(prospectIds: string[], campaignId: str
 
 export async function removeFromCampaignAction(prospectIds: string[], campaignId: string) {
   await removeProspectsFromCampaign(prospectIds, campaignId);
+  revalidatePath('/prospects');
+}
+
+export async function createTagAction(name: string, color: string) {
+  const user = await getRequiredUser();
+  const tag = await createTag(user.id!, { name, color });
+  revalidatePath('/prospects');
+  return tag;
+}
+
+export async function deleteTagAction(id: string) {
+  const user = await getRequiredUser();
+  await deleteTag(user.id!, id);
+  revalidatePath('/prospects');
+}
+
+export async function addTagAction(prospectIds: string[], tagId: string) {
+  await addTagToProspects(prospectIds, tagId);
   revalidatePath('/prospects');
 }
 
