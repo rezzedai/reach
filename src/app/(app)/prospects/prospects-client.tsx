@@ -29,7 +29,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Trash2, ChevronDown, ExternalLink, Search, CheckSquare, XSquare, ArrowUp, ArrowDown, Download, Plus, FolderPlus } from 'lucide-react';
+import { Trash2, ChevronDown, ChevronUp, ExternalLink, Search, CheckSquare, XSquare, ArrowUp, ArrowDown, Download, Plus, FolderPlus, Filter, X } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -97,6 +97,11 @@ export function ProspectsClient({ prospects, sequenceProspectIds, campaigns, pro
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [companyFilter, setCompanyFilter] = useState<string>('all');
   const [campaignFilter, setCampaignFilter] = useState<string>('all');
+  const [industryFilter, setIndustryFilter] = useState<string>('all');
+  const [locationFilter, setLocationFilter] = useState<string>('all');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [sortConfig, setSortConfig] = useState<SortConfig>(null);
   const [isPending, startTransition] = useTransition();
   const [newCampaignOpen, setNewCampaignOpen] = useState(false);
@@ -120,6 +125,16 @@ export function ProspectsClient({ prospects, sequenceProspectIds, campaigns, pro
     return Array.from(set).sort();
   }, [prospects]);
 
+  const industries = useMemo(() => {
+    const set = new Set(prospects.map((p) => p.industry).filter(Boolean));
+    return Array.from(set).sort();
+  }, [prospects]);
+
+  const locations = useMemo(() => {
+    const set = new Set(prospects.map((p) => p.location).filter(Boolean));
+    return Array.from(set).sort();
+  }, [prospects]);
+
   const filtered = useMemo(() => {
     const result = prospects.filter((p) => {
       if (statusFilter !== 'all' && p.status !== statusFilter) return false;
@@ -127,6 +142,14 @@ export function ProspectsClient({ prospects, sequenceProspectIds, campaigns, pro
       if (campaignFilter !== 'all') {
         const pcList = prospectCampaignMap.get(p.id) || [];
         if (!pcList.some((c) => c.campaignId === campaignFilter)) return false;
+      }
+      if (industryFilter !== 'all' && p.industry !== industryFilter) return false;
+      if (locationFilter !== 'all' && p.location !== locationFilter) return false;
+      if (dateFrom || dateTo) {
+        const d = Date.parse(p.connectedOn);
+        if (isNaN(d)) return false;
+        if (dateFrom && d < new Date(dateFrom).getTime()) return false;
+        if (dateTo && d > new Date(dateTo + 'T23:59:59').getTime()) return false;
       }
       if (search) {
         const q = search.toLowerCase();
@@ -151,7 +174,7 @@ export function ProspectsClient({ prospects, sequenceProspectIds, campaigns, pro
     }
 
     return result;
-  }, [prospects, search, statusFilter, companyFilter, campaignFilter, prospectCampaignMap, sortConfig]);
+  }, [prospects, search, statusFilter, companyFilter, campaignFilter, industryFilter, locationFilter, dateFrom, dateTo, prospectCampaignMap, sortConfig]);
 
   const allSelected = filtered.length > 0 && filtered.every((p) => selected.has(p.id));
 
@@ -190,6 +213,28 @@ export function ProspectsClient({ prospects, sequenceProspectIds, campaigns, pro
       await updateStatusAction(ids, status);
       toast.success(`Updated ${count} prospect(s) to "${status}"`);
     });
+  };
+
+  const activeFilterCount = [
+    statusFilter !== 'all',
+    companyFilter !== 'all',
+    campaignFilter !== 'all',
+    industryFilter !== 'all',
+    locationFilter !== 'all',
+    !!dateFrom,
+    !!dateTo,
+    !!search,
+  ].filter(Boolean).length;
+
+  const clearAllFilters = () => {
+    setSearch('');
+    setStatusFilter('all');
+    setCompanyFilter('all');
+    setCampaignFilter('all');
+    setIndustryFilter('all');
+    setLocationFilter('all');
+    setDateFrom('');
+    setDateTo('');
   };
 
   const handleSort = (column: SortColumn) => {
@@ -369,6 +414,27 @@ export function ProspectsClient({ prospects, sequenceProspectIds, campaigns, pro
             Showing {filtered.length} of {prospects.length}
           </span>
         )}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setShowAdvanced(!showAdvanced)}
+          className="whitespace-nowrap"
+        >
+          <Filter className="mr-1 h-4 w-4" />
+          Filters
+          {activeFilterCount > 0 && (
+            <Badge variant="secondary" className="ml-1 h-5 w-5 rounded-full p-0 text-xs">
+              {activeFilterCount}
+            </Badge>
+          )}
+          {showAdvanced ? <ChevronUp className="ml-1 h-3 w-3" /> : <ChevronDown className="ml-1 h-3 w-3" />}
+        </Button>
+        {activeFilterCount > 0 && (
+          <Button variant="ghost" size="sm" onClick={clearAllFilters} className="whitespace-nowrap">
+            <X className="mr-1 h-3 w-3" />
+            Clear filters
+          </Button>
+        )}
         {filtered.length > 0 && (
           <Button
             variant="outline"
@@ -384,6 +450,51 @@ export function ProspectsClient({ prospects, sequenceProspectIds, campaigns, pro
           </Button>
         )}
       </div>
+
+      {showAdvanced && (
+        <div className="flex flex-wrap items-center gap-3 rounded-md border bg-muted/30 p-3">
+          <Select value={industryFilter} onValueChange={setIndustryFilter}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Industry" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Industries</SelectItem>
+              {industries.map((i) => (
+                <SelectItem key={i} value={i}>{i}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={locationFilter} onValueChange={setLocationFilter}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Location" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Locations</SelectItem>
+              {locations.map((l) => (
+                <SelectItem key={l} value={l}>{l}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <div className="flex items-center gap-2">
+            <Label className="text-sm text-muted-foreground whitespace-nowrap">Connected</Label>
+            <Input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className="w-[150px]"
+              placeholder="From"
+            />
+            <span className="text-muted-foreground">to</span>
+            <Input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              className="w-[150px]"
+              placeholder="To"
+            />
+          </div>
+        </div>
+      )}
 
       {selected.size > 0 && (
         <div className="flex items-center gap-3 rounded-md border bg-muted/50 p-3">
