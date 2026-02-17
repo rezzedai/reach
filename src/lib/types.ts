@@ -12,6 +12,8 @@ export interface Prospect {
   location: string;
   linkedinUrl: string;
   connectedOn: string;
+  email: string;
+  phone: string;
   notes: string;
   status: ProspectStatus;
   importedAt: string;

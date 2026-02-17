@@ -36,6 +36,8 @@ export async function createProspects(
         location: p.location,
         linkedinUrl: p.linkedinUrl,
         connectedOn: p.connectedOn,
+        email: p.email,
+        phone: p.phone,
         notes: p.notes,
         status: p.status,
         importedAt: p.importedAt,

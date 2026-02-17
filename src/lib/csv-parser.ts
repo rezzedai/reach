@@ -21,8 +21,17 @@ const COLUMN_MAP: Record<string, keyof Prospect> = {
   'url': 'linkedinUrl',
   'connected on': 'connectedOn',
   'connection date': 'connectedOn',
+  'email': 'email',
+  'email address': 'email',
+  'e-mail': 'email',
+  'phone': 'phone',
+  'phone number': 'phone',
+  'mobile': 'phone',
   'notes': 'notes',
 };
+
+// Known LinkedIn export headers (normalized)
+const LINKEDIN_HEADERS = ['first name', 'last name', 'url', 'connected on'];
 
 function normalizeHeader(header: string): string {
   return header.toLowerCase().trim().replace(/['"]/g, '');
@@ -40,6 +49,8 @@ function mapRow(row: Record<string, string>, headerMap: Record<string, keyof Pro
     location: '',
     linkedinUrl: '',
     connectedOn: '',
+    email: '',
+    phone: '',
     notes: '',
     status: 'new',
     importedAt: new Date().toISOString(),
@@ -55,6 +66,82 @@ function mapRow(row: Record<string, string>, headerMap: Record<string, keyof Pro
   }
 
   return prospect;
+}
+
+/** The mappable prospect fields for generic CSV import */
+export const MAPPABLE_FIELDS = [
+  { key: 'firstName', label: 'First Name' },
+  { key: 'lastName', label: 'Last Name' },
+  { key: 'title', label: 'Title' },
+  { key: 'company', label: 'Company' },
+  { key: 'companySize', label: 'Company Size' },
+  { key: 'industry', label: 'Industry' },
+  { key: 'location', label: 'Location' },
+  { key: 'linkedinUrl', label: 'LinkedIn URL' },
+  { key: 'connectedOn', label: 'Connected On' },
+  { key: 'email', label: 'Email' },
+  { key: 'phone', label: 'Phone' },
+  { key: 'notes', label: 'Notes' },
+] as const;
+
+export type MappableField = (typeof MAPPABLE_FIELDS)[number]['key'];
+
+export interface ParsedCSV {
+  headers: string[];
+  rows: Record<string, string>[];
+}
+
+/** Parse raw CSV content into headers + rows without mapping */
+export function parseCSVRaw(content: string): ParsedCSV {
+  const result = Papa.parse<Record<string, string>>(content, {
+    header: true,
+    skipEmptyLines: true,
+    transformHeader: (h: string) => h.trim(),
+  });
+
+  if (result.data.length === 0) {
+    throw new Error('No records found in CSV file');
+  }
+
+  return {
+    headers: Object.keys(result.data[0]),
+    rows: result.data,
+  };
+}
+
+/** Detect if the CSV is a LinkedIn export by checking for known headers */
+export function isLinkedInFormat(headers: string[]): boolean {
+  const normalized = headers.map(normalizeHeader);
+  return LINKEDIN_HEADERS.every((h) => normalized.includes(h));
+}
+
+/** Auto-suggest column mappings based on header names */
+export function suggestMappings(headers: string[]): Record<string, MappableField | ''> {
+  const mappings: Record<string, MappableField | ''> = {};
+  for (const header of headers) {
+    const normalized = normalizeHeader(header);
+    const field = COLUMN_MAP[normalized];
+    mappings[header] = (field as MappableField) || '';
+  }
+  return mappings;
+}
+
+/** Apply user-defined column mappings to raw rows and produce Prospect[] */
+export function applyMappings(
+  rows: Record<string, string>[],
+  mappings: Record<string, MappableField | ''>
+): Prospect[] {
+  // Build a header→field map from the user mappings
+  const headerMap: Record<string, keyof Prospect> = {};
+  for (const [header, field] of Object.entries(mappings)) {
+    if (field) {
+      headerMap[normalizeHeader(header)] = field;
+    }
+  }
+
+  return rows
+    .map((row) => mapRow(row, headerMap))
+    .filter((p) => p.firstName || p.lastName);
 }
 
 export function parseCSVString(content: string): Prospect[] {

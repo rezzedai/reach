@@ -81,6 +81,8 @@ export const prospects = pgTable('prospects', {
   location: text('location').notNull().default(''),
   linkedinUrl: text('linkedinUrl').notNull().default(''),
   connectedOn: text('connectedOn').notNull().default(''),
+  email: text('email').notNull().default(''),
+  phone: text('phone').notNull().default(''),
   notes: text('notes').notNull().default(''),
   status: text('status', {
     enum: ['new', 'enriched', 'sequenced', 'contacted'],

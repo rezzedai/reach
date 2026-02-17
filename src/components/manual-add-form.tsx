@@ -31,6 +31,8 @@ export function ManualAddForm({ onAdd }: ManualAddFormProps) {
     industry: '',
     location: '',
     linkedinUrl: '',
+    email: '',
+    phone: '',
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -51,6 +53,8 @@ export function ManualAddForm({ onAdd }: ManualAddFormProps) {
       location: form.location,
       linkedinUrl: form.linkedinUrl,
       connectedOn: '',
+      email: form.email,
+      phone: form.phone,
       notes: '',
       status: 'new',
       importedAt: new Date().toISOString(),
@@ -66,6 +70,8 @@ export function ManualAddForm({ onAdd }: ManualAddFormProps) {
       industry: '',
       location: '',
       linkedinUrl: '',
+      email: '',
+      phone: '',
     });
     toast.success(`Added ${prospect.firstName} ${prospect.lastName}`);
   };
@@ -138,6 +144,27 @@ export function ManualAddForm({ onAdd }: ManualAddFormProps) {
                 id="location"
                 value={form.location}
                 onChange={(e) => setForm({ ...form, location: e.target.value })}
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                placeholder="name@company.com"
+              />
+            </div>
+            <div>
+              <Label htmlFor="phone">Phone</Label>
+              <Input
+                id="phone"
+                value={form.phone}
+                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                placeholder="+1 555-0100"
               />
             </div>
           </div>
