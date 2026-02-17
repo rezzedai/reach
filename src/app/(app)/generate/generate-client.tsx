@@ -3,7 +3,7 @@
 import { useState, useMemo, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { sampleSequences } from '@/lib/sample-sequences';
+import { sampleSequences, type PersonaId } from '@/lib/sample-sequences';
 import { fillTemplate } from '@/lib/templates';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -33,6 +33,7 @@ function GenerateContent({ prospects }: GenerateClientProps) {
 
   const [selected, setSelected] = useState<Set<string>>(new Set(preselectedIds));
   const [style, setStyle] = useState<OutreachStyle>('cold');
+  const [persona, setPersona] = useState<PersonaId>('three-bears');
   const [generating, setGenerating] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [results, setResults] = useState<{
@@ -54,15 +55,20 @@ function GenerateContent({ prospects }: GenerateClientProps) {
     });
   };
 
-  const findSampleSequence = (prospect: Prospect, outreachStyle: OutreachStyle): Sequence => {
+  const findSampleSequence = (prospect: Prospect, outreachStyle: OutreachStyle, selectedPersona: PersonaId): Sequence => {
     const match = sampleSequences.find((s) => {
+      if (s.persona !== selectedPersona) return false;
       if (s.style !== outreachStyle) return false;
       if (s.industry !== '*' && s.industry.toLowerCase() !== prospect.industry.toLowerCase()) return false;
       if (s.titlePattern !== '.*' && !new RegExp(s.titlePattern, 'i').test(prospect.title)) return false;
       return true;
     });
 
-    const template = match || sampleSequences.find((s) => s.style === outreachStyle) || sampleSequences[0];
+    const template =
+      match ||
+      sampleSequences.find((s) => s.persona === selectedPersona && s.style === outreachStyle) ||
+      sampleSequences.find((s) => s.style === outreachStyle) ||
+      sampleSequences[0];
 
     return {
       id: nanoid(10),
@@ -104,7 +110,7 @@ function GenerateContent({ prospects }: GenerateClientProps) {
         const errorData = await response.json();
         if (response.status === 500 && errorData.error?.includes('API key')) {
           toast.info('Using demo mode (no API key configured)');
-          const demoSequences = selectedProspects.map((p) => findSampleSequence(p, style));
+          const demoSequences = selectedProspects.map((p) => findSampleSequence(p, style, persona));
           await saveSequencesAction(
             demoSequences,
             demoSequences.map((s) => s.prospectId)
@@ -132,7 +138,7 @@ function GenerateContent({ prospects }: GenerateClientProps) {
       }
     } catch {
       toast.info('Using demo mode');
-      const demoSequences = selectedProspects.map((p) => findSampleSequence(p, style));
+      const demoSequences = selectedProspects.map((p) => findSampleSequence(p, style, persona));
       await saveSequencesAction(
         demoSequences,
         demoSequences.map((s) => s.prospectId)
@@ -210,6 +216,19 @@ function GenerateContent({ prospects }: GenerateClientProps) {
       {!results && (
         <>
           <div className="flex items-center gap-4">
+            <div>
+              <label className="text-sm font-medium">Persona</label>
+              <Select value={persona} onValueChange={(v) => setPersona(v as PersonaId)}>
+                <SelectTrigger className="w-[200px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="three-bears">Three Bears Data</SelectItem>
+                  <SelectItem value="career-coach">Career Coach (Rich Luby)</SelectItem>
+                  <SelectItem value="employment-seeker">Employment Seeker (Christian)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <div>
               <label className="text-sm font-medium">Outreach Style</label>
               <Select value={style} onValueChange={(v) => setStyle(v as OutreachStyle)}>

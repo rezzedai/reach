@@ -20,12 +20,14 @@ export const config = {
     /*
      * Match all paths except:
      * - /login
+     * - /request-access (public invite request page)
+     * - /admin (handles its own auth check server-side)
      * - /api/auth (NextAuth routes)
      * - /api/import-connections (Chrome extension — uses API key auth)
      * - /api/health
      * - /_next (Next.js internals)
      * - /favicon.ico, /icon*, /apple-icon* (static assets)
      */
-    '/((?!login|api/auth|api/import-connections|api/health|_next|favicon\\.ico|icon|apple-icon).*)',
+    '/((?!login|request-access|admin|api/auth|api/import-connections|api/health|_next|favicon\\.ico|icon|apple-icon).*)',
   ],
 };
