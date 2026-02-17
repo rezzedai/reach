@@ -72,7 +72,7 @@ function getTagColorClasses(color: string) {
   return c ? `${c.bg} ${c.text}` : 'bg-gray-100 text-gray-800';
 }
 
-type SortColumn = 'name' | 'title' | 'company' | 'industry' | 'status' | 'connectedOn';
+type SortColumn = 'name' | 'title' | 'company' | 'companySize' | 'industry' | 'location' | 'email' | 'phone' | 'status' | 'connectedOn';
 type SortConfig = { column: SortColumn; direction: 'asc' | 'desc' } | null;
 
 function getSortValue(prospect: Prospect, column: SortColumn): string | number {
@@ -83,8 +83,16 @@ function getSortValue(prospect: Prospect, column: SortColumn): string | number {
       return prospect.title.toLowerCase();
     case 'company':
       return prospect.company.toLowerCase();
+    case 'companySize':
+      return prospect.companySize.toLowerCase();
     case 'industry':
       return prospect.industry.toLowerCase();
+    case 'location':
+      return prospect.location.toLowerCase();
+    case 'email':
+      return prospect.email.toLowerCase();
+    case 'phone':
+      return prospect.phone.toLowerCase();
     case 'status':
       return prospect.status;
     case 'connectedOn': {
@@ -279,7 +287,7 @@ export function ProspectsClient({ prospects, sequenceProspectIds, campaigns, pro
   };
 
   const handleExportCSV = () => {
-    const headers = ['Name', 'Title', 'Company', 'Company Size', 'Industry', 'Location', 'LinkedIn URL', 'Connected On', 'Status', 'Notes'];
+    const headers = ['Name', 'Title', 'Company', 'Company Size', 'Industry', 'Location', 'Email', 'Phone', 'LinkedIn URL', 'Connected On', 'Status', 'Notes'];
     const rows = filtered.map((p) => [
       `${p.firstName} ${p.lastName}`.trim(),
       p.title,
@@ -287,6 +295,8 @@ export function ProspectsClient({ prospects, sequenceProspectIds, campaigns, pro
       p.companySize,
       p.industry,
       p.location,
+      p.email,
+      p.phone,
       p.linkedinUrl,
       p.connectedOn,
       p.status,
@@ -671,7 +681,7 @@ export function ProspectsClient({ prospects, sequenceProspectIds, campaigns, pro
           <ImportDialog existingProspects={prospects} onImport={handleImport} />
         </div>
       ) : (
-        <div className="rounded-md border">
+        <div className="rounded-md border overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -682,7 +692,11 @@ export function ProspectsClient({ prospects, sequenceProspectIds, campaigns, pro
                   ['name', 'Name'],
                   ['title', 'Title'],
                   ['company', 'Company'],
+                  ['companySize', 'Company Size'],
                   ['industry', 'Industry'],
+                  ['location', 'Location'],
+                  ['email', 'Email'],
+                  ['phone', 'Phone'],
                   ['status', 'Status'],
                   ['connectedOn', 'Connected On'],
                 ] as const).map(([col, label]) => (
@@ -726,7 +740,19 @@ export function ProspectsClient({ prospects, sequenceProspectIds, campaigns, pro
                   </TableCell>
                   <TableCell>{prospect.company || '\u2014'}</TableCell>
                   <TableCell className="text-muted-foreground">
+                    {prospect.companySize || '\u2014'}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
                     {prospect.industry || '\u2014'}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {prospect.location || '\u2014'}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {prospect.email || '\u2014'}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {prospect.phone || '\u2014'}
                   </TableCell>
                   <TableCell>
                     <Badge variant="secondary" className={STATUS_COLORS[prospect.status as ProspectStatus]}>
