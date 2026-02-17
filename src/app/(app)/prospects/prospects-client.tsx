@@ -80,19 +80,19 @@ function getSortValue(prospect: Prospect, column: SortColumn): string | number {
     case 'name':
       return `${prospect.firstName} ${prospect.lastName}`.toLowerCase();
     case 'title':
-      return prospect.title.toLowerCase();
+      return (prospect.title ?? '').toLowerCase();
     case 'company':
-      return prospect.company.toLowerCase();
+      return (prospect.company ?? '').toLowerCase();
     case 'companySize':
-      return prospect.companySize.toLowerCase();
+      return (prospect.companySize ?? '').toLowerCase();
     case 'industry':
-      return prospect.industry.toLowerCase();
+      return (prospect.industry ?? '').toLowerCase();
     case 'location':
-      return prospect.location.toLowerCase();
+      return (prospect.location ?? '').toLowerCase();
     case 'email':
-      return prospect.email.toLowerCase();
+      return (prospect.email ?? '').toLowerCase();
     case 'phone':
-      return prospect.phone.toLowerCase();
+      return (prospect.phone ?? '').toLowerCase();
     case 'status':
       return prospect.status;
     case 'connectedOn': {
@@ -102,11 +102,12 @@ function getSortValue(prospect: Prospect, column: SortColumn): string | number {
   }
 }
 
-function csvEscape(value: string): string {
-  if (value.includes(',') || value.includes('"') || value.includes('\n')) {
-    return `"${value.replace(/"/g, '""')}"`;
+function csvEscape(value: string | null | undefined): string {
+  const v = value ?? '';
+  if (v.includes(',') || v.includes('"') || v.includes('\n')) {
+    return `"${v.replace(/"/g, '""')}"`;
   }
-  return value;
+  return v;
 }
 
 export function ProspectsClient({ prospects, sequenceProspectIds, campaigns, prospectCampaigns, tags: tagsList, prospectTags: prospectTagsList }: ProspectsClientProps) {
