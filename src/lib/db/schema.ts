@@ -178,3 +178,21 @@ export const prospectTags = pgTable(
   },
   (t) => [primaryKey({ columns: [t.prospectId, t.tagId] })]
 );
+
+// ── Access Requests ──
+
+export const accessRequests = pgTable('access_requests', {
+  id: text('id')
+    .primaryKey()
+    .$defaultFn(() => nanoid(10)),
+  name: text('name').notNull(),
+  email: text('email').notNull(),
+  reason: text('reason').notNull().default(''),
+  status: text('status', { enum: ['pending', 'approved', 'denied'] })
+    .notNull()
+    .default('pending'),
+  createdAt: timestamp('createdAt', { mode: 'string' })
+    .notNull()
+    .$defaultFn(() => new Date().toISOString()),
+  reviewedAt: timestamp('reviewedAt', { mode: 'string' }),
+});
