@@ -31,6 +31,19 @@ export interface Message {
   respondedAt?: string | null;
 }
 
+export interface Campaign {
+  id: string;
+  userId?: string;
+  name: string;
+  description: string;
+  createdAt: string;
+}
+
+export interface ProspectCampaign {
+  prospectId: string;
+  campaignId: string;
+}
+
 export interface Sequence {
   id: string;
   prospectId: string;

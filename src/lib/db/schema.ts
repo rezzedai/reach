@@ -121,3 +121,32 @@ export const sequences = pgTable('sequences', {
     { day: number; type: string; subject: string | null; body: string; status?: 'pending' | 'sent' | 'responded' | 'skipped'; sentAt?: string | null; respondedAt?: string | null }[]
   >().notNull(),
 });
+
+// ── Campaigns ──
+
+export const campaigns = pgTable('campaigns', {
+  id: text('id')
+    .primaryKey()
+    .$defaultFn(() => nanoid(10)),
+  userId: text('userId')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  description: text('description').notNull().default(''),
+  createdAt: timestamp('createdAt', { mode: 'string' })
+    .notNull()
+    .$defaultFn(() => new Date().toISOString()),
+});
+
+export const prospectCampaigns = pgTable(
+  'prospect_campaigns',
+  {
+    prospectId: text('prospectId')
+      .notNull()
+      .references(() => prospects.id, { onDelete: 'cascade' }),
+    campaignId: text('campaignId')
+      .notNull()
+      .references(() => campaigns.id, { onDelete: 'cascade' }),
+  },
+  (t) => [primaryKey({ columns: [t.prospectId, t.campaignId] })]
+);

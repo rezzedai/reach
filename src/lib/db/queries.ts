@@ -1,5 +1,5 @@
 import { db } from '@/lib/db';
-import { prospects, sequences, users } from './schema';
+import { prospects, sequences, users, campaigns, prospectCampaigns } from './schema';
 import { eq, and, inArray, lte, isNull, isNotNull, gte, sql } from 'drizzle-orm';
 import type { Prospect, Sequence, MessageStatus } from '@/lib/types';
 
@@ -295,6 +295,80 @@ export async function updateMessageStatus(
     .where(and(eq(prospects.userId, userId), eq(prospects.id, seq.prospectId)));
 
   return { ...seq, messages };
+}
+
+// ── Campaigns ──
+
+export async function getCampaigns(userId: string) {
+  return db.select().from(campaigns).where(eq(campaigns.userId, userId));
+}
+
+export async function createCampaign(
+  userId: string,
+  data: { name: string; description?: string }
+) {
+  const rows = await db
+    .insert(campaigns)
+    .values({
+      userId,
+      name: data.name,
+      description: data.description || '',
+    })
+    .returning();
+  return rows[0];
+}
+
+export async function updateCampaign(
+  userId: string,
+  id: string,
+  data: { name?: string; description?: string }
+) {
+  return db
+    .update(campaigns)
+    .set(data)
+    .where(and(eq(campaigns.userId, userId), eq(campaigns.id, id)));
+}
+
+export async function deleteCampaign(userId: string, id: string) {
+  return db
+    .delete(campaigns)
+    .where(and(eq(campaigns.userId, userId), eq(campaigns.id, id)));
+}
+
+export async function addProspectsToCampaign(
+  prospectIds: string[],
+  campaignId: string
+) {
+  if (prospectIds.length === 0) return;
+  const values = prospectIds.map((prospectId) => ({ prospectId, campaignId }));
+  await db.insert(prospectCampaigns).values(values).onConflictDoNothing();
+}
+
+export async function removeProspectsFromCampaign(
+  prospectIds: string[],
+  campaignId: string
+) {
+  if (prospectIds.length === 0) return;
+  await db
+    .delete(prospectCampaigns)
+    .where(
+      and(
+        inArray(prospectCampaigns.prospectId, prospectIds),
+        eq(prospectCampaigns.campaignId, campaignId)
+      )
+    );
+}
+
+export async function getProspectCampaigns(userId: string) {
+  return db
+    .select({
+      prospectId: prospectCampaigns.prospectId,
+      campaignId: prospectCampaigns.campaignId,
+      campaignName: campaigns.name,
+    })
+    .from(prospectCampaigns)
+    .innerJoin(campaigns, eq(prospectCampaigns.campaignId, campaigns.id))
+    .where(eq(campaigns.userId, userId));
 }
 
 // ── Users / API Keys ──
