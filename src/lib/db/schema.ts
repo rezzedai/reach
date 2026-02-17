@@ -81,6 +81,8 @@ export const prospects = pgTable('prospects', {
   location: text('location').notNull().default(''),
   linkedinUrl: text('linkedinUrl').notNull().default(''),
   connectedOn: text('connectedOn').notNull().default(''),
+  email: text('email').notNull().default(''),
+  phone: text('phone').notNull().default(''),
   notes: text('notes').notNull().default(''),
   status: text('status', {
     enum: ['new', 'enriched', 'sequenced', 'contacted'],
@@ -90,6 +92,8 @@ export const prospects = pgTable('prospects', {
   importedAt: timestamp('importedAt', { mode: 'string' })
     .notNull()
     .$defaultFn(() => new Date().toISOString()),
+  lastContactedAt: timestamp('lastContactedAt', { mode: 'string' }),
+  nextFollowUpAt: timestamp('nextFollowUpAt', { mode: 'string' }),
 });
 
 export const sequences = pgTable('sequences', {
@@ -116,6 +120,61 @@ export const sequences = pgTable('sequences', {
   generationTime: text('generationTime').notNull().default(''),
   demo: boolean('demo').notNull().default(false),
   messages: jsonb('messages').$type<
-    { day: number; type: string; subject: string | null; body: string }[]
+    { day: number; type: string; subject: string | null; body: string; status?: 'pending' | 'sent' | 'responded' | 'skipped'; sentAt?: string | null; respondedAt?: string | null }[]
   >().notNull(),
 });
+
+// ── Campaigns ──
+
+export const campaigns = pgTable('campaigns', {
+  id: text('id')
+    .primaryKey()
+    .$defaultFn(() => nanoid(10)),
+  userId: text('userId')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  description: text('description').notNull().default(''),
+  createdAt: timestamp('createdAt', { mode: 'string' })
+    .notNull()
+    .$defaultFn(() => new Date().toISOString()),
+});
+
+export const prospectCampaigns = pgTable(
+  'prospect_campaigns',
+  {
+    prospectId: text('prospectId')
+      .notNull()
+      .references(() => prospects.id, { onDelete: 'cascade' }),
+    campaignId: text('campaignId')
+      .notNull()
+      .references(() => campaigns.id, { onDelete: 'cascade' }),
+  },
+  (t) => [primaryKey({ columns: [t.prospectId, t.campaignId] })]
+);
+
+// ── Tags ──
+
+export const tags = pgTable('tags', {
+  id: text('id')
+    .primaryKey()
+    .$defaultFn(() => nanoid(10)),
+  userId: text('userId')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  color: text('color').notNull().default('gray'),
+});
+
+export const prospectTags = pgTable(
+  'prospect_tags',
+  {
+    prospectId: text('prospectId')
+      .notNull()
+      .references(() => prospects.id, { onDelete: 'cascade' }),
+    tagId: text('tagId')
+      .notNull()
+      .references(() => tags.id, { onDelete: 'cascade' }),
+  },
+  (t) => [primaryKey({ columns: [t.prospectId, t.tagId] })]
+);

@@ -11,11 +11,13 @@ import {
   Mail,
   Settings,
   LogOut,
+  Target,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+  { name: 'Outreach', href: '/dashboard', icon: Target },
   { name: 'Prospects', href: '/prospects', icon: Users },
   { name: 'Generate', href: '/generate', icon: Sparkles },
   { name: 'Sequences', href: '/sequences', icon: Mail },

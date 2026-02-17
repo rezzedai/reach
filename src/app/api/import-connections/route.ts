@@ -100,6 +100,8 @@ export async function POST(req: NextRequest) {
         location: '',
         linkedinUrl: conn.url || '',
         connectedOn: conn.connectedOn || '',
+        email: '',
+        phone: '',
         notes: '',
         status: 'new' as const,
         importedAt: new Date().toISOString(),

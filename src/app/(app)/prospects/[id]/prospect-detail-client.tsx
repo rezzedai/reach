@@ -8,10 +8,10 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ArrowLeft, Copy, ExternalLink, Sparkles } from 'lucide-react';
+import { ArrowLeft, Copy, ExternalLink, Sparkles, Send, MessageCircle, SkipForward } from 'lucide-react';
 import { toast } from 'sonner';
-import { updateProspectAction } from '../actions';
-import type { ProspectStatus } from '@/lib/types';
+import { updateProspectAction, updateMessageStatusAction } from '../actions';
+import type { ProspectStatus, MessageStatus } from '@/lib/types';
 
 const STATUS_COLORS: Record<ProspectStatus, string> = {
   new: 'bg-blue-100 text-blue-800',
@@ -34,6 +34,13 @@ const TYPE_LABELS: Record<string, string> = {
   gentle_follow_up: 'Follow-up',
 };
 
+const MSG_STATUS_COLORS: Record<string, string> = {
+  pending: 'bg-gray-100 text-gray-800',
+  sent: 'bg-blue-100 text-blue-800',
+  responded: 'bg-green-100 text-green-800',
+  skipped: 'bg-yellow-100 text-yellow-800',
+};
+
 interface ProspectDetailClientProps {
   prospect: {
     id: string;
@@ -52,7 +59,7 @@ interface ProspectDetailClientProps {
     style: string;
     generationTime: string;
     prospectId: string;
-    messages: { day: number; type: string; subject: string | null; body: string }[];
+    messages: { day: number; type: string; subject: string | null; body: string; status?: MessageStatus; sentAt?: string | null; respondedAt?: string | null }[];
   } | null;
 }
 
@@ -68,6 +75,14 @@ export function ProspectDetailClient({ prospect, sequence }: ProspectDetailClien
   const copyMessage = (body: string) => {
     navigator.clipboard.writeText(body);
     toast.success('Copied to clipboard');
+  };
+
+  const handleMessageStatus = (messageIndex: number, status: MessageStatus) => {
+    if (!sequence) return;
+    startTransition(async () => {
+      await updateMessageStatusAction(sequence.id, messageIndex, status);
+      toast.success(`Message marked as ${status}`);
+    });
   };
 
   return (
@@ -181,33 +196,84 @@ export function ProspectDetailClient({ prospect, sequence }: ProspectDetailClien
                   <span>{sequence.generationTime}</span>
                 </div>
               </div>
-              {sequence.messages.map((msg, i) => (
-                <Card key={i}>
-                  <CardContent className="pt-4">
-                    <div className="mb-2 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline">Day {msg.day}</Badge>
-                        <span className="text-sm font-medium">
-                          {TYPE_LABELS[msg.type] || msg.type}
-                        </span>
+              {sequence.messages.map((msg, i) => {
+                const msgStatus = msg.status || 'pending';
+                return (
+                  <Card key={i}>
+                    <CardContent className="pt-4">
+                      <div className="mb-2 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline">Day {msg.day}</Badge>
+                          <span className="text-sm font-medium">
+                            {TYPE_LABELS[msg.type] || msg.type}
+                          </span>
+                          <Badge variant="secondary" className={MSG_STATUS_COLORS[msgStatus]}>
+                            {msgStatus}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          {msgStatus === 'pending' && (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleMessageStatus(i, 'sent')}
+                                disabled={isPending}
+                                title="Mark as sent"
+                              >
+                                <Send className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleMessageStatus(i, 'skipped')}
+                                disabled={isPending}
+                                title="Skip"
+                              >
+                                <SkipForward className="h-3 w-3" />
+                              </Button>
+                            </>
+                          )}
+                          {msgStatus === 'sent' && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleMessageStatus(i, 'responded')}
+                              disabled={isPending}
+                              title="Mark as responded"
+                            >
+                              <MessageCircle className="h-3 w-3" />
+                            </Button>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => copyMessage(msg.body)}
+                          >
+                            <Copy className="h-3 w-3" />
+                          </Button>
+                        </div>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => copyMessage(msg.body)}
-                      >
-                        <Copy className="h-3 w-3" />
-                      </Button>
-                    </div>
-                    {msg.subject && (
-                      <p className="mb-1 text-sm font-medium text-muted-foreground">
-                        Subject: {msg.subject}
-                      </p>
-                    )}
-                    <p className="whitespace-pre-wrap text-sm">{msg.body}</p>
-                  </CardContent>
-                </Card>
-              ))}
+                      {msg.sentAt && (
+                        <p className="mb-1 text-xs text-muted-foreground">
+                          Sent: {new Date(msg.sentAt).toLocaleDateString()}
+                        </p>
+                      )}
+                      {msg.respondedAt && (
+                        <p className="mb-1 text-xs text-muted-foreground">
+                          Responded: {new Date(msg.respondedAt).toLocaleDateString()}
+                        </p>
+                      )}
+                      {msg.subject && (
+                        <p className="mb-1 text-sm font-medium text-muted-foreground">
+                          Subject: {msg.subject}
+                        </p>
+                      )}
+                      <p className="whitespace-pre-wrap text-sm">{msg.body}</p>
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </>
           ) : (
             <Card>

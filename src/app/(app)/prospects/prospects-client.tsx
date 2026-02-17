@@ -29,13 +29,26 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Trash2, ChevronDown, ExternalLink, Search, CheckSquare, XSquare } from 'lucide-react';
-import type { Prospect, ProspectStatus } from '@/lib/types';
+import { Trash2, ChevronDown, ChevronUp, ExternalLink, Search, CheckSquare, XSquare, ArrowUp, ArrowDown, Download, Plus, FolderPlus, Filter, X, Tag } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import type { Prospect, ProspectStatus, Campaign, Tag as TagType } from '@/lib/types';
+import { TAG_COLORS } from '@/lib/types';
 import { toast } from 'sonner';
 import {
   addProspectsAction,
   updateStatusAction,
   deleteProspectsAction,
+  createCampaignAction,
+  addToCampaignAction,
+  createTagAction,
+  addTagAction,
 } from './actions';
 
 const STATUS_COLORS: Record<ProspectStatus, string> = {
@@ -48,26 +61,124 @@ const STATUS_COLORS: Record<ProspectStatus, string> = {
 interface ProspectsClientProps {
   prospects: Prospect[];
   sequenceProspectIds: string[];
+  campaigns: Campaign[];
+  prospectCampaigns: { prospectId: string; campaignId: string; campaignName: string }[];
+  tags: TagType[];
+  prospectTags: { prospectId: string; tagId: string; tagName: string; tagColor: string }[];
 }
 
-export function ProspectsClient({ prospects, sequenceProspectIds }: ProspectsClientProps) {
+function getTagColorClasses(color: string) {
+  const c = TAG_COLORS.find((tc) => tc.name === color);
+  return c ? `${c.bg} ${c.text}` : 'bg-gray-100 text-gray-800';
+}
+
+type SortColumn = 'name' | 'title' | 'company' | 'industry' | 'status' | 'connectedOn';
+type SortConfig = { column: SortColumn; direction: 'asc' | 'desc' } | null;
+
+function getSortValue(prospect: Prospect, column: SortColumn): string | number {
+  switch (column) {
+    case 'name':
+      return `${prospect.firstName} ${prospect.lastName}`.toLowerCase();
+    case 'title':
+      return prospect.title.toLowerCase();
+    case 'company':
+      return prospect.company.toLowerCase();
+    case 'industry':
+      return prospect.industry.toLowerCase();
+    case 'status':
+      return prospect.status;
+    case 'connectedOn': {
+      const d = Date.parse(prospect.connectedOn);
+      return isNaN(d) ? 0 : d;
+    }
+  }
+}
+
+function csvEscape(value: string): string {
+  if (value.includes(',') || value.includes('"') || value.includes('\n')) {
+    return `"${value.replace(/"/g, '""')}"`;
+  }
+  return value;
+}
+
+export function ProspectsClient({ prospects, sequenceProspectIds, campaigns, prospectCampaigns, tags: tagsList, prospectTags: prospectTagsList }: ProspectsClientProps) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [companyFilter, setCompanyFilter] = useState<string>('all');
+  const [campaignFilter, setCampaignFilter] = useState<string>('all');
+  const [industryFilter, setIndustryFilter] = useState<string>('all');
+  const [locationFilter, setLocationFilter] = useState<string>('all');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [tagFilter, setTagFilter] = useState<string>('all');
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [sortConfig, setSortConfig] = useState<SortConfig>(null);
   const [isPending, startTransition] = useTransition();
+  const [newCampaignOpen, setNewCampaignOpen] = useState(false);
+  const [newCampaignName, setNewCampaignName] = useState('');
+  const [newCampaignDesc, setNewCampaignDesc] = useState('');
+  const [newTagOpen, setNewTagOpen] = useState(false);
+  const [newTagName, setNewTagName] = useState('');
+  const [newTagColor, setNewTagColor] = useState('blue');
 
   const seqSet = useMemo(() => new Set(sequenceProspectIds), [sequenceProspectIds]);
+
+  const prospectCampaignMap = useMemo(() => {
+    const map = new Map<string, { campaignId: string; campaignName: string }[]>();
+    for (const pc of prospectCampaigns) {
+      const list = map.get(pc.prospectId) || [];
+      list.push({ campaignId: pc.campaignId, campaignName: pc.campaignName });
+      map.set(pc.prospectId, list);
+    }
+    return map;
+  }, [prospectCampaigns]);
+
+  const prospectTagMap = useMemo(() => {
+    const map = new Map<string, { tagId: string; tagName: string; tagColor: string }[]>();
+    for (const pt of prospectTagsList) {
+      const list = map.get(pt.prospectId) || [];
+      list.push({ tagId: pt.tagId, tagName: pt.tagName, tagColor: pt.tagColor });
+      map.set(pt.prospectId, list);
+    }
+    return map;
+  }, [prospectTagsList]);
 
   const companies = useMemo(() => {
     const set = new Set(prospects.map((p) => p.company).filter(Boolean));
     return Array.from(set).sort();
   }, [prospects]);
 
+  const industries = useMemo(() => {
+    const set = new Set(prospects.map((p) => p.industry).filter(Boolean));
+    return Array.from(set).sort();
+  }, [prospects]);
+
+  const locations = useMemo(() => {
+    const set = new Set(prospects.map((p) => p.location).filter(Boolean));
+    return Array.from(set).sort();
+  }, [prospects]);
+
   const filtered = useMemo(() => {
-    return prospects.filter((p) => {
+    const result = prospects.filter((p) => {
       if (statusFilter !== 'all' && p.status !== statusFilter) return false;
       if (companyFilter !== 'all' && p.company !== companyFilter) return false;
+      if (campaignFilter !== 'all') {
+        const pcList = prospectCampaignMap.get(p.id) || [];
+        if (!pcList.some((c) => c.campaignId === campaignFilter)) return false;
+      }
+      if (tagFilter !== 'all') {
+        const ptList = prospectTagMap.get(p.id) || [];
+        if (!ptList.some((t) => t.tagId === tagFilter)) return false;
+      }
+      if (industryFilter !== 'all' && p.industry !== industryFilter) return false;
+      if (locationFilter !== 'all' && p.location !== locationFilter) return false;
+      if (dateFrom || dateTo) {
+        const d = Date.parse(p.connectedOn);
+        if (isNaN(d)) return false;
+        if (dateFrom && d < new Date(dateFrom).getTime()) return false;
+        if (dateTo && d > new Date(dateTo + 'T23:59:59').getTime()) return false;
+      }
       if (search) {
         const q = search.toLowerCase();
         return (
@@ -80,7 +191,18 @@ export function ProspectsClient({ prospects, sequenceProspectIds }: ProspectsCli
       }
       return true;
     });
-  }, [prospects, search, statusFilter, companyFilter]);
+
+    if (sortConfig) {
+      result.sort((a, b) => {
+        const aVal = getSortValue(a, sortConfig.column);
+        const bVal = getSortValue(b, sortConfig.column);
+        const cmp = aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
+        return sortConfig.direction === 'asc' ? cmp : -cmp;
+      });
+    }
+
+    return result;
+  }, [prospects, search, statusFilter, companyFilter, campaignFilter, tagFilter, industryFilter, locationFilter, dateFrom, dateTo, prospectCampaignMap, prospectTagMap, sortConfig]);
 
   const allSelected = filtered.length > 0 && filtered.every((p) => selected.has(p.id));
 
@@ -121,6 +243,104 @@ export function ProspectsClient({ prospects, sequenceProspectIds }: ProspectsCli
     });
   };
 
+  const activeFilterCount = [
+    statusFilter !== 'all',
+    companyFilter !== 'all',
+    campaignFilter !== 'all',
+    tagFilter !== 'all',
+    industryFilter !== 'all',
+    locationFilter !== 'all',
+    !!dateFrom,
+    !!dateTo,
+    !!search,
+  ].filter(Boolean).length;
+
+  const clearAllFilters = () => {
+    setSearch('');
+    setStatusFilter('all');
+    setCompanyFilter('all');
+    setCampaignFilter('all');
+    setTagFilter('all');
+    setIndustryFilter('all');
+    setLocationFilter('all');
+    setDateFrom('');
+    setDateTo('');
+  };
+
+  const handleSort = (column: SortColumn) => {
+    setSortConfig((prev) => {
+      if (prev?.column === column) {
+        return prev.direction === 'asc'
+          ? { column, direction: 'desc' }
+          : null;
+      }
+      return { column, direction: 'asc' };
+    });
+  };
+
+  const handleExportCSV = () => {
+    const headers = ['Name', 'Title', 'Company', 'Company Size', 'Industry', 'Location', 'LinkedIn URL', 'Connected On', 'Status', 'Notes'];
+    const rows = filtered.map((p) => [
+      `${p.firstName} ${p.lastName}`.trim(),
+      p.title,
+      p.company,
+      p.companySize,
+      p.industry,
+      p.location,
+      p.linkedinUrl,
+      p.connectedOn,
+      p.status,
+      p.notes,
+    ]);
+    const csv = [headers, ...rows].map((row) => row.map(csvEscape).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const date = new Date().toISOString().slice(0, 10);
+    a.href = url;
+    a.download = `prospects-${date}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleCreateCampaign = () => {
+    if (!newCampaignName.trim()) return;
+    startTransition(async () => {
+      await createCampaignAction(newCampaignName.trim(), newCampaignDesc.trim());
+      toast.success(`Campaign "${newCampaignName.trim()}" created`);
+      setNewCampaignName('');
+      setNewCampaignDesc('');
+      setNewCampaignOpen(false);
+    });
+  };
+
+  const handleAddToCampaign = (campaignId: string) => {
+    const ids = Array.from(selected);
+    startTransition(async () => {
+      await addToCampaignAction(ids, campaignId);
+      toast.success(`Added ${ids.length} prospect(s) to campaign`);
+    });
+  };
+
+  const handleCreateTag = () => {
+    if (!newTagName.trim()) return;
+    startTransition(async () => {
+      await createTagAction(newTagName.trim(), newTagColor);
+      toast.success(`Tag "${newTagName.trim()}" created`);
+      setNewTagName('');
+      setNewTagColor('blue');
+      setNewTagOpen(false);
+    });
+  };
+
+  const handleAddTag = (tagId: string) => {
+    const ids = Array.from(selected);
+    startTransition(async () => {
+      await addTagAction(ids, tagId);
+      toast.success(`Tagged ${ids.length} prospect(s)`);
+    });
+  };
+
   const handleImport = (newProspects: Prospect[]) => {
     startTransition(async () => {
       await addProspectsAction(newProspects);
@@ -145,6 +365,84 @@ export function ProspectsClient({ prospects, sequenceProspectIds }: ProspectsCli
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Dialog open={newCampaignOpen} onOpenChange={setNewCampaignOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" size="sm">
+                <Plus className="mr-1 h-4 w-4" />
+                New Campaign
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Create Campaign</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-3">
+                <div>
+                  <Label>Name</Label>
+                  <Input
+                    value={newCampaignName}
+                    onChange={(e) => setNewCampaignName(e.target.value)}
+                    placeholder="Campaign name"
+                  />
+                </div>
+                <div>
+                  <Label>Description</Label>
+                  <Input
+                    value={newCampaignDesc}
+                    onChange={(e) => setNewCampaignDesc(e.target.value)}
+                    placeholder="Optional description"
+                  />
+                </div>
+                <Button onClick={handleCreateCampaign} disabled={!newCampaignName.trim() || isPending}>
+                  Create
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+          <Dialog open={newTagOpen} onOpenChange={setNewTagOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" size="sm">
+                <Tag className="mr-1 h-4 w-4" />
+                New Tag
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Create Tag</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-3">
+                <div>
+                  <Label>Name</Label>
+                  <Input
+                    value={newTagName}
+                    onChange={(e) => setNewTagName(e.target.value)}
+                    placeholder="Tag name"
+                  />
+                </div>
+                <div>
+                  <Label>Color</Label>
+                  <div className="flex flex-wrap gap-2 mt-1">
+                    {TAG_COLORS.map((tc) => (
+                      <button
+                        key={tc.name}
+                        type="button"
+                        className={`h-7 w-7 rounded-full ${tc.bg} border-2 ${newTagColor === tc.name ? 'border-foreground' : 'border-transparent'}`}
+                        onClick={() => setNewTagColor(tc.name)}
+                        title={tc.name}
+                      />
+                    ))}
+                  </div>
+                </div>
+                <Button onClick={handleCreateTag} disabled={!newTagName.trim() || isPending}>
+                  Create
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+          <Button variant="outline" size="sm" onClick={handleExportCSV}>
+            <Download className="mr-1 h-4 w-4" />
+            Export CSV
+          </Button>
           <ManualAddForm onAdd={handleAdd} />
           <ImportDialog existingProspects={prospects} onImport={handleImport} />
         </div>
@@ -185,10 +483,46 @@ export function ProspectsClient({ prospects, sequenceProspectIds }: ProspectsCli
             ))}
           </SelectContent>
         </Select>
+        {campaigns.length > 0 && (
+          <Select value={campaignFilter} onValueChange={setCampaignFilter}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Campaign" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Campaigns</SelectItem>
+              {campaigns.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
         {filtered.length !== prospects.length && (
           <span className="text-sm text-muted-foreground">
             Showing {filtered.length} of {prospects.length}
           </span>
+        )}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setShowAdvanced(!showAdvanced)}
+          className="whitespace-nowrap"
+        >
+          <Filter className="mr-1 h-4 w-4" />
+          Filters
+          {activeFilterCount > 0 && (
+            <Badge variant="secondary" className="ml-1 h-5 w-5 rounded-full p-0 text-xs">
+              {activeFilterCount}
+            </Badge>
+          )}
+          {showAdvanced ? <ChevronUp className="ml-1 h-3 w-3" /> : <ChevronDown className="ml-1 h-3 w-3" />}
+        </Button>
+        {activeFilterCount > 0 && (
+          <Button variant="ghost" size="sm" onClick={clearAllFilters} className="whitespace-nowrap">
+            <X className="mr-1 h-3 w-3" />
+            Clear filters
+          </Button>
         )}
         {filtered.length > 0 && (
           <Button
@@ -205,6 +539,69 @@ export function ProspectsClient({ prospects, sequenceProspectIds }: ProspectsCli
           </Button>
         )}
       </div>
+
+      {showAdvanced && (
+        <div className="flex flex-wrap items-center gap-3 rounded-md border bg-muted/30 p-3">
+          <Select value={industryFilter} onValueChange={setIndustryFilter}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Industry" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Industries</SelectItem>
+              {industries.map((i) => (
+                <SelectItem key={i} value={i}>{i}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={locationFilter} onValueChange={setLocationFilter}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Location" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Locations</SelectItem>
+              {locations.map((l) => (
+                <SelectItem key={l} value={l}>{l}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {tagsList.length > 0 && (
+            <Select value={tagFilter} onValueChange={setTagFilter}>
+              <SelectTrigger className="w-[160px]">
+                <SelectValue placeholder="Tag" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Tags</SelectItem>
+                {tagsList.map((t) => (
+                  <SelectItem key={t.id} value={t.id}>
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className={`inline-block h-2 w-2 rounded-full ${getTagColorClasses(t.color).split(' ')[0]}`} />
+                      {t.name}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          <div className="flex items-center gap-2">
+            <Label className="text-sm text-muted-foreground whitespace-nowrap">Connected</Label>
+            <Input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className="w-[150px]"
+              placeholder="From"
+            />
+            <span className="text-muted-foreground">to</span>
+            <Input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              className="w-[150px]"
+              placeholder="To"
+            />
+          </div>
+        </div>
+      )}
 
       {selected.size > 0 && (
         <div className="flex items-center gap-3 rounded-md border bg-muted/50 p-3">
@@ -223,6 +620,41 @@ export function ProspectsClient({ prospects, sequenceProspectIds }: ProspectsCli
               <DropdownMenuItem onClick={() => handleBulkStatus('contacted')}>Contacted</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          {campaigns.length > 0 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <FolderPlus className="mr-1 h-3 w-3" />
+                  Add to Campaign <ChevronDown className="ml-1 h-3 w-3" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                {campaigns.map((c) => (
+                  <DropdownMenuItem key={c.id} onClick={() => handleAddToCampaign(c.id)}>
+                    {c.name}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+          {tagsList.length > 0 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Tag className="mr-1 h-3 w-3" />
+                  Add Tag <ChevronDown className="ml-1 h-3 w-3" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                {tagsList.map((t) => (
+                  <DropdownMenuItem key={t.id} onClick={() => handleAddTag(t.id)}>
+                    <span className={`inline-block h-2 w-2 rounded-full mr-1.5 ${getTagColorClasses(t.color).split(' ')[0]}`} />
+                    {t.name}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
           <Button variant="destructive" size="sm" onClick={handleBulkDelete} disabled={isPending}>
             <Trash2 className="mr-1 h-3 w-3" />
             Delete
@@ -246,11 +678,29 @@ export function ProspectsClient({ prospects, sequenceProspectIds }: ProspectsCli
                 <TableHead className="w-[40px]">
                   <Checkbox checked={allSelected} onCheckedChange={toggleAll} />
                 </TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead>Title</TableHead>
-                <TableHead>Company</TableHead>
-                <TableHead>Industry</TableHead>
-                <TableHead>Status</TableHead>
+                {([
+                  ['name', 'Name'],
+                  ['title', 'Title'],
+                  ['company', 'Company'],
+                  ['industry', 'Industry'],
+                  ['status', 'Status'],
+                  ['connectedOn', 'Connected On'],
+                ] as const).map(([col, label]) => (
+                  <TableHead
+                    key={col}
+                    className="cursor-pointer select-none hover:bg-muted/50"
+                    onClick={() => handleSort(col)}
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      {label}
+                      {sortConfig?.column === col && (
+                        sortConfig.direction === 'asc'
+                          ? <ArrowUp className="h-3 w-3" />
+                          : <ArrowDown className="h-3 w-3" />
+                      )}
+                    </span>
+                  </TableHead>
+                ))}
                 <TableHead className="w-[40px]"></TableHead>
               </TableRow>
             </TableHeader>
@@ -287,6 +737,19 @@ export function ProspectsClient({ prospects, sequenceProspectIds }: ProspectsCli
                         seq
                       </Badge>
                     )}
+                    {(prospectCampaignMap.get(prospect.id) || []).map((c) => (
+                      <Badge key={c.campaignId} variant="outline" className="ml-1 text-xs">
+                        {c.campaignName}
+                      </Badge>
+                    ))}
+                    {(prospectTagMap.get(prospect.id) || []).map((t) => (
+                      <Badge key={t.tagId} className={`ml-1 text-xs ${getTagColorClasses(t.tagColor)}`}>
+                        {t.tagName}
+                      </Badge>
+                    ))}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground text-sm">
+                    {prospect.connectedOn || '\u2014'}
                   </TableCell>
                   <TableCell>
                     {prospect.linkedinUrl && (
