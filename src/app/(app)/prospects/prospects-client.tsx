@@ -29,7 +29,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Trash2, ChevronDown, ExternalLink, Search, CheckSquare, XSquare } from 'lucide-react';
+import { Trash2, ChevronDown, ExternalLink, Search, CheckSquare, XSquare, ArrowUp, ArrowDown, Download } from 'lucide-react';
 import type { Prospect, ProspectStatus } from '@/lib/types';
 import { toast } from 'sonner';
 import {
@@ -50,11 +50,41 @@ interface ProspectsClientProps {
   sequenceProspectIds: string[];
 }
 
+type SortColumn = 'name' | 'title' | 'company' | 'industry' | 'status' | 'connectedOn';
+type SortConfig = { column: SortColumn; direction: 'asc' | 'desc' } | null;
+
+function getSortValue(prospect: Prospect, column: SortColumn): string | number {
+  switch (column) {
+    case 'name':
+      return `${prospect.firstName} ${prospect.lastName}`.toLowerCase();
+    case 'title':
+      return prospect.title.toLowerCase();
+    case 'company':
+      return prospect.company.toLowerCase();
+    case 'industry':
+      return prospect.industry.toLowerCase();
+    case 'status':
+      return prospect.status;
+    case 'connectedOn': {
+      const d = Date.parse(prospect.connectedOn);
+      return isNaN(d) ? 0 : d;
+    }
+  }
+}
+
+function csvEscape(value: string): string {
+  if (value.includes(',') || value.includes('"') || value.includes('\n')) {
+    return `"${value.replace(/"/g, '""')}"`;
+  }
+  return value;
+}
+
 export function ProspectsClient({ prospects, sequenceProspectIds }: ProspectsClientProps) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [companyFilter, setCompanyFilter] = useState<string>('all');
+  const [sortConfig, setSortConfig] = useState<SortConfig>(null);
   const [isPending, startTransition] = useTransition();
 
   const seqSet = useMemo(() => new Set(sequenceProspectIds), [sequenceProspectIds]);
@@ -65,7 +95,7 @@ export function ProspectsClient({ prospects, sequenceProspectIds }: ProspectsCli
   }, [prospects]);
 
   const filtered = useMemo(() => {
-    return prospects.filter((p) => {
+    const result = prospects.filter((p) => {
       if (statusFilter !== 'all' && p.status !== statusFilter) return false;
       if (companyFilter !== 'all' && p.company !== companyFilter) return false;
       if (search) {
@@ -80,7 +110,18 @@ export function ProspectsClient({ prospects, sequenceProspectIds }: ProspectsCli
       }
       return true;
     });
-  }, [prospects, search, statusFilter, companyFilter]);
+
+    if (sortConfig) {
+      result.sort((a, b) => {
+        const aVal = getSortValue(a, sortConfig.column);
+        const bVal = getSortValue(b, sortConfig.column);
+        const cmp = aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
+        return sortConfig.direction === 'asc' ? cmp : -cmp;
+      });
+    }
+
+    return result;
+  }, [prospects, search, statusFilter, companyFilter, sortConfig]);
 
   const allSelected = filtered.length > 0 && filtered.every((p) => selected.has(p.id));
 
@@ -121,6 +162,42 @@ export function ProspectsClient({ prospects, sequenceProspectIds }: ProspectsCli
     });
   };
 
+  const handleSort = (column: SortColumn) => {
+    setSortConfig((prev) => {
+      if (prev?.column === column) {
+        return prev.direction === 'asc'
+          ? { column, direction: 'desc' }
+          : null;
+      }
+      return { column, direction: 'asc' };
+    });
+  };
+
+  const handleExportCSV = () => {
+    const headers = ['Name', 'Title', 'Company', 'Company Size', 'Industry', 'Location', 'LinkedIn URL', 'Connected On', 'Status', 'Notes'];
+    const rows = filtered.map((p) => [
+      `${p.firstName} ${p.lastName}`.trim(),
+      p.title,
+      p.company,
+      p.companySize,
+      p.industry,
+      p.location,
+      p.linkedinUrl,
+      p.connectedOn,
+      p.status,
+      p.notes,
+    ]);
+    const csv = [headers, ...rows].map((row) => row.map(csvEscape).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const date = new Date().toISOString().slice(0, 10);
+    a.href = url;
+    a.download = `prospects-${date}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const handleImport = (newProspects: Prospect[]) => {
     startTransition(async () => {
       await addProspectsAction(newProspects);
@@ -145,6 +222,10 @@ export function ProspectsClient({ prospects, sequenceProspectIds }: ProspectsCli
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={handleExportCSV}>
+            <Download className="mr-1 h-4 w-4" />
+            Export CSV
+          </Button>
           <ManualAddForm onAdd={handleAdd} />
           <ImportDialog existingProspects={prospects} onImport={handleImport} />
         </div>
@@ -246,11 +327,29 @@ export function ProspectsClient({ prospects, sequenceProspectIds }: ProspectsCli
                 <TableHead className="w-[40px]">
                   <Checkbox checked={allSelected} onCheckedChange={toggleAll} />
                 </TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead>Title</TableHead>
-                <TableHead>Company</TableHead>
-                <TableHead>Industry</TableHead>
-                <TableHead>Status</TableHead>
+                {([
+                  ['name', 'Name'],
+                  ['title', 'Title'],
+                  ['company', 'Company'],
+                  ['industry', 'Industry'],
+                  ['status', 'Status'],
+                  ['connectedOn', 'Connected On'],
+                ] as const).map(([col, label]) => (
+                  <TableHead
+                    key={col}
+                    className="cursor-pointer select-none hover:bg-muted/50"
+                    onClick={() => handleSort(col)}
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      {label}
+                      {sortConfig?.column === col && (
+                        sortConfig.direction === 'asc'
+                          ? <ArrowUp className="h-3 w-3" />
+                          : <ArrowDown className="h-3 w-3" />
+                      )}
+                    </span>
+                  </TableHead>
+                ))}
                 <TableHead className="w-[40px]"></TableHead>
               </TableRow>
             </TableHeader>
@@ -287,6 +386,9 @@ export function ProspectsClient({ prospects, sequenceProspectIds }: ProspectsCli
                         seq
                       </Badge>
                     )}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground text-sm">
+                    {prospect.connectedOn || '\u2014'}
                   </TableCell>
                   <TableCell>
                     {prospect.linkedinUrl && (
