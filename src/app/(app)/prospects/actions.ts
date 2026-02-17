@@ -8,6 +8,11 @@ import {
   updateProspectStatus,
   deleteProspects,
   updateMessageStatus,
+  createCampaign,
+  updateCampaign,
+  deleteCampaign,
+  addProspectsToCampaign,
+  removeProspectsFromCampaign,
 } from '@/lib/db/queries';
 import type { Prospect, ProspectStatus, MessageStatus } from '@/lib/types';
 
@@ -40,6 +45,35 @@ export async function deleteProspectsAction(ids: string[]) {
   await deleteProspects(user.id!, ids);
   revalidatePath('/prospects');
   revalidatePath('/');
+}
+
+export async function createCampaignAction(name: string, description?: string) {
+  const user = await getRequiredUser();
+  const campaign = await createCampaign(user.id!, { name, description });
+  revalidatePath('/prospects');
+  return campaign;
+}
+
+export async function updateCampaignAction(id: string, data: { name?: string; description?: string }) {
+  const user = await getRequiredUser();
+  await updateCampaign(user.id!, id, data);
+  revalidatePath('/prospects');
+}
+
+export async function deleteCampaignAction(id: string) {
+  const user = await getRequiredUser();
+  await deleteCampaign(user.id!, id);
+  revalidatePath('/prospects');
+}
+
+export async function addToCampaignAction(prospectIds: string[], campaignId: string) {
+  await addProspectsToCampaign(prospectIds, campaignId);
+  revalidatePath('/prospects');
+}
+
+export async function removeFromCampaignAction(prospectIds: string[], campaignId: string) {
+  await removeProspectsFromCampaign(prospectIds, campaignId);
+  revalidatePath('/prospects');
 }
 
 export async function updateMessageStatusAction(

@@ -29,13 +29,23 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Trash2, ChevronDown, ExternalLink, Search, CheckSquare, XSquare, ArrowUp, ArrowDown, Download } from 'lucide-react';
-import type { Prospect, ProspectStatus } from '@/lib/types';
+import { Trash2, ChevronDown, ExternalLink, Search, CheckSquare, XSquare, ArrowUp, ArrowDown, Download, Plus, FolderPlus } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import type { Prospect, ProspectStatus, Campaign } from '@/lib/types';
 import { toast } from 'sonner';
 import {
   addProspectsAction,
   updateStatusAction,
   deleteProspectsAction,
+  createCampaignAction,
+  addToCampaignAction,
 } from './actions';
 
 const STATUS_COLORS: Record<ProspectStatus, string> = {
@@ -48,6 +58,8 @@ const STATUS_COLORS: Record<ProspectStatus, string> = {
 interface ProspectsClientProps {
   prospects: Prospect[];
   sequenceProspectIds: string[];
+  campaigns: Campaign[];
+  prospectCampaigns: { prospectId: string; campaignId: string; campaignName: string }[];
 }
 
 type SortColumn = 'name' | 'title' | 'company' | 'industry' | 'status' | 'connectedOn';
@@ -79,15 +91,29 @@ function csvEscape(value: string): string {
   return value;
 }
 
-export function ProspectsClient({ prospects, sequenceProspectIds }: ProspectsClientProps) {
+export function ProspectsClient({ prospects, sequenceProspectIds, campaigns, prospectCampaigns }: ProspectsClientProps) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [companyFilter, setCompanyFilter] = useState<string>('all');
+  const [campaignFilter, setCampaignFilter] = useState<string>('all');
   const [sortConfig, setSortConfig] = useState<SortConfig>(null);
   const [isPending, startTransition] = useTransition();
+  const [newCampaignOpen, setNewCampaignOpen] = useState(false);
+  const [newCampaignName, setNewCampaignName] = useState('');
+  const [newCampaignDesc, setNewCampaignDesc] = useState('');
 
   const seqSet = useMemo(() => new Set(sequenceProspectIds), [sequenceProspectIds]);
+
+  const prospectCampaignMap = useMemo(() => {
+    const map = new Map<string, { campaignId: string; campaignName: string }[]>();
+    for (const pc of prospectCampaigns) {
+      const list = map.get(pc.prospectId) || [];
+      list.push({ campaignId: pc.campaignId, campaignName: pc.campaignName });
+      map.set(pc.prospectId, list);
+    }
+    return map;
+  }, [prospectCampaigns]);
 
   const companies = useMemo(() => {
     const set = new Set(prospects.map((p) => p.company).filter(Boolean));
@@ -98,6 +124,10 @@ export function ProspectsClient({ prospects, sequenceProspectIds }: ProspectsCli
     const result = prospects.filter((p) => {
       if (statusFilter !== 'all' && p.status !== statusFilter) return false;
       if (companyFilter !== 'all' && p.company !== companyFilter) return false;
+      if (campaignFilter !== 'all') {
+        const pcList = prospectCampaignMap.get(p.id) || [];
+        if (!pcList.some((c) => c.campaignId === campaignFilter)) return false;
+      }
       if (search) {
         const q = search.toLowerCase();
         return (
@@ -121,7 +151,7 @@ export function ProspectsClient({ prospects, sequenceProspectIds }: ProspectsCli
     }
 
     return result;
-  }, [prospects, search, statusFilter, companyFilter, sortConfig]);
+  }, [prospects, search, statusFilter, companyFilter, campaignFilter, prospectCampaignMap, sortConfig]);
 
   const allSelected = filtered.length > 0 && filtered.every((p) => selected.has(p.id));
 
@@ -198,6 +228,25 @@ export function ProspectsClient({ prospects, sequenceProspectIds }: ProspectsCli
     URL.revokeObjectURL(url);
   };
 
+  const handleCreateCampaign = () => {
+    if (!newCampaignName.trim()) return;
+    startTransition(async () => {
+      await createCampaignAction(newCampaignName.trim(), newCampaignDesc.trim());
+      toast.success(`Campaign "${newCampaignName.trim()}" created`);
+      setNewCampaignName('');
+      setNewCampaignDesc('');
+      setNewCampaignOpen(false);
+    });
+  };
+
+  const handleAddToCampaign = (campaignId: string) => {
+    const ids = Array.from(selected);
+    startTransition(async () => {
+      await addToCampaignAction(ids, campaignId);
+      toast.success(`Added ${ids.length} prospect(s) to campaign`);
+    });
+  };
+
   const handleImport = (newProspects: Prospect[]) => {
     startTransition(async () => {
       await addProspectsAction(newProspects);
@@ -222,6 +271,40 @@ export function ProspectsClient({ prospects, sequenceProspectIds }: ProspectsCli
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Dialog open={newCampaignOpen} onOpenChange={setNewCampaignOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" size="sm">
+                <Plus className="mr-1 h-4 w-4" />
+                New Campaign
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Create Campaign</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-3">
+                <div>
+                  <Label>Name</Label>
+                  <Input
+                    value={newCampaignName}
+                    onChange={(e) => setNewCampaignName(e.target.value)}
+                    placeholder="Campaign name"
+                  />
+                </div>
+                <div>
+                  <Label>Description</Label>
+                  <Input
+                    value={newCampaignDesc}
+                    onChange={(e) => setNewCampaignDesc(e.target.value)}
+                    placeholder="Optional description"
+                  />
+                </div>
+                <Button onClick={handleCreateCampaign} disabled={!newCampaignName.trim() || isPending}>
+                  Create
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
           <Button variant="outline" size="sm" onClick={handleExportCSV}>
             <Download className="mr-1 h-4 w-4" />
             Export CSV
@@ -266,6 +349,21 @@ export function ProspectsClient({ prospects, sequenceProspectIds }: ProspectsCli
             ))}
           </SelectContent>
         </Select>
+        {campaigns.length > 0 && (
+          <Select value={campaignFilter} onValueChange={setCampaignFilter}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Campaign" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Campaigns</SelectItem>
+              {campaigns.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
         {filtered.length !== prospects.length && (
           <span className="text-sm text-muted-foreground">
             Showing {filtered.length} of {prospects.length}
@@ -304,6 +402,23 @@ export function ProspectsClient({ prospects, sequenceProspectIds }: ProspectsCli
               <DropdownMenuItem onClick={() => handleBulkStatus('contacted')}>Contacted</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          {campaigns.length > 0 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <FolderPlus className="mr-1 h-3 w-3" />
+                  Add to Campaign <ChevronDown className="ml-1 h-3 w-3" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                {campaigns.map((c) => (
+                  <DropdownMenuItem key={c.id} onClick={() => handleAddToCampaign(c.id)}>
+                    {c.name}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
           <Button variant="destructive" size="sm" onClick={handleBulkDelete} disabled={isPending}>
             <Trash2 className="mr-1 h-3 w-3" />
             Delete
@@ -386,6 +501,11 @@ export function ProspectsClient({ prospects, sequenceProspectIds }: ProspectsCli
                         seq
                       </Badge>
                     )}
+                    {(prospectCampaignMap.get(prospect.id) || []).map((c) => (
+                      <Badge key={c.campaignId} variant="outline" className="ml-1 text-xs">
+                        {c.campaignName}
+                      </Badge>
+                    ))}
                   </TableCell>
                   <TableCell className="text-muted-foreground text-sm">
                     {prospect.connectedOn || '\u2014'}
