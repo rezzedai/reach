@@ -79,7 +79,7 @@ Chrome Extension                    CSV Upload
 
 **Chrome Extension path**: The extension sends connections as JSON to `/api/import-connections`. Authentication uses the user's API key via `Authorization: Bearer <key>`. The endpoint parses full names into first/last, extracts company from title strings (handles "at" and "|" patterns), and bulk-inserts.
 
-**CSV Upload path**: Parsing happens client-side using PapaParse. The `csv-parser.ts` module handles automatic header detection (maps 20+ common column names to prospect fields), deduplication against existing prospects (firstName + lastName + company), and returns clean `Prospect[]` objects. These are saved via a Server Action.
+**CSV Upload path**: Parsing happens client-side using PapaParse. The `csv-parser.ts` module handles automatic header detection (maps 20+ common column names to prospect fields), deduplication against existing prospects (firstName + lastName + company), and returns clean `Prospect[]` objects. These are saved via a Server Action. For generic CSVs that are not in the standard LinkedIn export format, the import flow includes a column mapping step where the user maps their CSV headers to prospect fields. A 5-row preview is shown before the final import is confirmed.
 
 ### Data Flow: Sequence Generation
 
@@ -111,6 +111,27 @@ Chrome Extension                    CSV Upload
 
 **Demo mode fallback**: When no AI API key is configured, the client-side code uses `sample-sequences.ts` to match pre-written templates by industry and title pattern, fills in prospect variables, and returns sequences without hitting any API.
 
+### Data Flow: Outreach Tracking
+
+Message status is tracked via a JSONB read-modify-write pattern on the `sequences` table.
+
+```
+updateMessageStatus(sequenceId, messageIndex, status)
+        │
+        ├── Read sequence.messages (JSONB array) from DB
+        │
+        ├── Update messages[messageIndex].status
+        │   Also sets sentAt or respondedAt depending on new status
+        │
+        ├── Write updated messages array back to sequences table
+        │
+        └── Update prospect fields:
+            ├── lastContactedAt = now() (when status = 'sent')
+            └── nextFollowUpAt  = calculated from next pending message day
+```
+
+The dashboard aggregates status counts across all sequences for the user by scanning each sequence's `messages` JSONB array. No separate message rows are written — the sequence record is the single source of truth for outreach state.
+
 ## Database Schema
 
 PostgreSQL via Supabase, managed with Drizzle ORM. Schema defined in `src/lib/db/schema.ts`.
@@ -141,36 +162,59 @@ PostgreSQL via Supabase, managed with Drizzle ORM. Schema defined in `src/lib/db
         │          │    ┌──────────────────┐
         │          │    │  prospects        │
         │          ├───<│ id (PK)           │
-        │               │ userId (FK)       │
-        │               │ firstName         │
-        │               │ lastName          │
-        │               │ title             │
-        │               │ company           │
-        │               │ companySize       │
-        │               │ industry          │
-        │               │ location          │
-        │               │ linkedinUrl       │
-        │               │ connectedOn       │
-        │               │ notes             │
-        │               │ status (enum)     │
-        │               │ importedAt        │
-        │               └────────┬─────────┘
-        │                        │
-        │               ┌────────┴─────────┐
-        │               │  sequences       │
-        └──────────────<│ id (PK)          │
-                        │ userId (FK)      │
-                        │ prospectId (FK,UQ)│
-                        │ prospectName     │
-                        │ company          │
-                        │ style (enum)     │
-                        │ model            │
-                        │ provider         │
-                        │ generatedAt      │
-                        │ generationTime   │
-                        │ demo             │
-                        │ messages (JSONB) │
-                        └──────────────────┘
+        │          │    │ userId (FK)       │
+        │          │    │ firstName         │
+        │          │    │ lastName          │
+        │          │    │ title             │
+        │          │    │ company           │
+        │          │    │ companySize       │
+        │          │    │ industry          │
+        │          │    │ location          │
+        │          │    │ linkedinUrl       │
+        │          │    │ connectedOn       │
+        │          │    │ notes             │
+        │          │    │ email             │
+        │          │    │ phone             │
+        │          │    │ lastContactedAt   │
+        │          │    │ nextFollowUpAt    │
+        │          │    │ status (enum)     │
+        │          │    │ importedAt        │
+        │          │    └──┬──────────┬────┘
+        │          │       │          │
+        │          │  ┌────┴──────┐ ┌─┴──────────────┐
+        │          │  │prospect_  │ │prospect_tags   │
+        │          │  │campaigns  │ │                │
+        │          │  ├───────────┤ ├────────────────┤
+        │          │  │prospectId │ │prospectId (FK) │
+        │          │  │(FK, PK)   │ │tagId (FK, PK)  │
+        │          │  │campaignId │ └───────┬────────┘
+        │          │  │(FK, PK)   │         │
+        │          │  └─────┬─────┘  ┌──────┴──────┐
+        │          │        │        │    tags      │
+        │          │  ┌─────┴──────┐ ├──────────────┤
+        │          │  │  campaigns │ │ id (PK)      │
+        │          ├─<│ id (PK)    │ │ userId (FK)  │
+        │          │  │ userId (FK)│ │ name         │
+        │          │  │ name       │ │ color        │
+        │          │  │ description│ └──────────────┘
+        │          │  │ createdAt  │
+        │          │  └────────────┘
+        │          │
+        │          │    ┌──────────────────┐
+        │          │    │  sequences       │
+        │          ├───<│ id (PK)          │
+        │               │ userId (FK)      │
+        │               │ prospectId (FK,UQ)│
+        │               │ prospectName     │
+        │               │ company          │
+        │               │ style (enum)     │
+        │               │ model            │
+        │               │ provider         │
+        │               │ generatedAt      │
+        │               │ generationTime   │
+        │               │ demo             │
+        │               │ messages (JSONB) │
+        └──────────────<└──────────────────┘
 ```
 
 ### Table Details
@@ -204,6 +248,10 @@ Core business table. All queries are scoped by `userId`.
 | `linkedinUrl` | `text` | LinkedIn profile URL |
 | `connectedOn` | `text` | Connection date from LinkedIn |
 | `notes` | `text` | Free-form notes |
+| `email` | `text` | Contact email (default `''`) |
+| `phone` | `text` | Contact phone (default `''`) |
+| `lastContactedAt` | `timestamp` | Last message sent timestamp |
+| `nextFollowUpAt` | `timestamp` | Calculated next follow-up date |
 | `status` | `text` enum | `new` → `enriched` → `sequenced` → `contacted` |
 | `importedAt` | `timestamp` | ISO string, auto-set on creation |
 
@@ -229,12 +277,54 @@ One sequence per prospect (unique constraint on `prospectId`). Regenerating a se
 
 ```typescript
 interface Message {
-  day: number;        // 0, 3, 5, 7, 12, or 14
-  type: string;       // "connection_request", "follow_up_1", etc.
-  subject: string | null;  // null for Day 0 messages
-  body: string;       // Message body text
+  day: number;              // 0, 3, 5, 7, 12, or 14
+  type: string;             // "connection_request", "follow_up_1", etc.
+  subject: string | null;   // null for Day 0 messages
+  body: string;             // Message body text
+  status?: 'pending' | 'sent' | 'responded' | 'skipped';
+  sentAt?: string | null;
+  respondedAt?: string | null;
 }
 ```
+
+#### `campaigns`
+Groups of prospects for organizing outreach efforts. One user can have many campaigns.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | `text` PK | nanoid(10), auto-generated |
+| `userId` | `text` FK | References `users.id`, cascade delete |
+| `name` | `text` | Campaign name |
+| `description` | `text` | Optional description (default `''`) |
+| `createdAt` | `timestamp` | Auto-set on creation |
+
+#### `prospect_campaigns`
+Join table linking prospects to campaigns. A prospect can belong to many campaigns; a campaign can contain many prospects.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `prospectId` | `text` FK | References `prospects.id`, cascade delete |
+| `campaignId` | `text` FK | References `campaigns.id`, cascade delete |
+| (composite PK) | | `(prospectId, campaignId)` |
+
+#### `tags`
+User-defined labels for prospects. One user can have many tags.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | `text` PK | nanoid(10), auto-generated |
+| `userId` | `text` FK | References `users.id`, cascade delete |
+| `name` | `text` | Tag label |
+| `color` | `text` | Display color (default `'gray'`) |
+
+#### `prospect_tags`
+Join table linking prospects to tags. A prospect can have many tags; a tag can apply to many prospects.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `prospectId` | `text` FK | References `prospects.id`, cascade delete |
+| `tagId` | `text` FK | References `tags.id`, cascade delete |
+| (composite PK) | | `(prospectId, tagId)` |
 
 #### Auth.js tables
 `accounts`, `sessions`, and `verificationTokens` follow the standard [Auth.js Drizzle schema](https://authjs.dev/getting-started/adapters/drizzle).
@@ -368,3 +458,5 @@ The extension only activates on LinkedIn connection pages. It uses `chrome.scrip
 7. **Client-side CSV parsing**: PapaParse runs in the browser to avoid uploading large files to the server. Only the parsed, validated prospect objects are sent via Server Action.
 
 8. **Dual AI provider support**: The provider abstraction allows switching between Anthropic and Gemini with a single env var change, useful for cost optimization and avoiding rate limits.
+
+9. **Many-to-many via join tables for campaigns and tags**: Campaigns and tags use dedicated join tables (`prospect_campaigns`, `prospect_tags`) with composite primary keys and `onConflictDoNothing` for idempotent assignment. Both tables cascade on delete from either side.

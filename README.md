@@ -10,8 +10,16 @@ Built for B2B sales teams at [Three Bears Data](https://threebearsdata.com).
 - **CSV Upload** — Import from Sales Navigator, LinkedIn data exports, or any spreadsheet
 - **AI Sequence Generation** — Generates personalized 4-message outreach sequences per prospect using Claude or Gemini
 - **Three Outreach Styles** — Cold, Warm, and Referral modes with distinct tone and cadence
-- **Prospect Management** — Search, filter, bulk actions, deduplication, and status tracking
+- **Prospect Management** — Search, filter by status/company/campaign/tag/industry/location/date, sort by any column, bulk actions, deduplication, and status tracking
 - **Dashboard Analytics** — KPIs, status breakdown, top industries, and recent sequences at a glance
+- **Sortable Tables** — Click any column header to sort ascending/descending with visual indicators
+- **CSV Export** — Download filtered prospect data as properly-escaped CSV
+- **Outreach Tracking** — Track message status (pending/sent/responded/skipped) with timestamps per message
+- **Outreach Dashboard** — Dedicated `/dashboard` view showing ready-to-send, follow-ups due, awaiting response, and recently responded
+- **Campaigns** — Group prospects into campaigns for targeted outreach with bulk assignment
+- **Custom Tags** — Create colored tags for flexible categorization beyond status, with filtering and bulk tagging
+- **Generic CSV Import** — Import any CSV with automatic LinkedIn format detection or manual column mapping with preview
+- **Email & Phone Fields** — Contact fields beyond LinkedIn for lightweight CRM use
 - **Multi-User Support** — Google OAuth with per-user data isolation and API keys
 - **Demo Mode** — Full product experience without an AI API key using pre-built sample sequences
 
@@ -81,6 +89,7 @@ linkedin-outreach-web/
 │   ├── app/
 │   │   ├── (app)/                  # Authenticated app pages
 │   │   │   ├── page.tsx            # Dashboard
+│   │   │   ├── dashboard/         # Outreach tracking dashboard
 │   │   │   ├── prospects/          # Prospect list + detail views
 │   │   │   ├── generate/           # Sequence generation UI
 │   │   │   ├── sequences/          # Sequence list view
@@ -157,12 +166,13 @@ npx drizzle-kit studio    # Open Drizzle Studio (database GUI)
 │   Import     │     │   Organize   │     │    Generate     │     │    Review     │
 │              │────>│              │────>│                │────>│              │
 │ Extension or │     │ Filter, tag, │     │ AI writes 4-msg│     │ Edit, copy,  │
-│ CSV upload   │     │ deduplicate  │     │ sequences      │     │ send on LI   │
+│ CSV upload   │     │ campaign,sort│     │ sequences      │     │ send on LI   │
+│              │     │ deduplicate  │     │                │     │              │
 └─────────────┘     └──────────────┘     └────────────────┘     └──────────────┘
 ```
 
 1. **Import** — Pull contacts from LinkedIn via the Chrome extension or upload a CSV
-2. **Organize** — Filter and segment your prospects by company, title, industry, or status
+2. **Organize** — Filter, tag, assign campaigns, sort, and deduplicate your prospects by company, title, industry, status, or custom tags
 3. **Generate** — Select prospects, choose a style (Cold/Warm/Referral), and let AI write personalized sequences
 4. **Review & Send** — Review generated messages, make edits, then copy and send through LinkedIn
 

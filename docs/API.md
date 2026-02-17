@@ -280,6 +280,15 @@ In addition to API routes, the app uses Next.js Server Actions for mutations tha
 | `updateProspectAction` | `(id: string, data: Partial<Prospect>) → void` | Update a single prospect |
 | `updateStatusAction` | `(ids: string[], status: ProspectStatus) → void` | Bulk update status |
 | `deleteProspectsAction` | `(ids: string[]) → void` | Bulk delete prospects |
+| `updateMessageStatusAction` | `(sequenceId: string, messageIndex: number, status: MessageStatus) → Sequence` | Mark a message as sent/responded/skipped, updates prospect timestamps |
+| `createCampaignAction` | `(name: string, description?: string) → Campaign` | Create a new campaign |
+| `updateCampaignAction` | `(id: string, data: { name?: string; description?: string }) → void` | Update campaign details |
+| `deleteCampaignAction` | `(id: string) → void` | Delete a campaign |
+| `addToCampaignAction` | `(prospectIds: string[], campaignId: string) → void` | Add prospects to a campaign |
+| `removeFromCampaignAction` | `(prospectIds: string[], campaignId: string) → void` | Remove prospects from a campaign |
+| `createTagAction` | `(name: string, color: string) → Tag` | Create a new tag |
+| `deleteTagAction` | `(id: string) → void` | Delete a tag |
+| `addTagAction` | `(prospectIds: string[], tagId: string) → void` | Add a tag to prospects |
 
 ### Generate Actions (`src/app/(app)/generate/actions.ts`)
 
@@ -312,9 +321,13 @@ interface Prospect {
   location: string;
   linkedinUrl: string;
   connectedOn: string;
+  email: string;
+  phone: string;
   notes: string;
   status: 'new' | 'enriched' | 'sequenced' | 'contacted';
   importedAt: string;
+  lastContactedAt?: string | null;
+  nextFollowUpAt?: string | null;
 }
 ```
 
@@ -344,5 +357,41 @@ interface Message {
   type: string;
   subject: string | null;
   body: string;
+  status?: 'pending' | 'sent' | 'responded' | 'skipped';
+  sentAt?: string | null;
+  respondedAt?: string | null;
 }
 ```
+
+### `MessageStatus`
+
+```typescript
+type MessageStatus = 'pending' | 'sent' | 'responded' | 'skipped';
+```
+
+### `Campaign`
+
+```typescript
+interface Campaign {
+  id: string;
+  userId?: string;
+  name: string;
+  description: string;
+  createdAt: string;
+}
+```
+
+### `Tag`
+
+```typescript
+interface Tag {
+  id: string;
+  userId?: string;
+  name: string;
+  color: string;
+}
+```
+
+### `TAG_COLORS`
+
+Available tag colors: `gray`, `red`, `orange`, `yellow`, `green`, `blue`, `purple`, `pink`. Each has associated Tailwind CSS classes for background and text.
