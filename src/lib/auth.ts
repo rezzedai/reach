@@ -5,12 +5,26 @@ import { db } from '@/lib/db';
 import { users, accounts, sessions, verificationTokens, accessRequests } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
+import type { PersonaId } from '@/lib/sample-sequences';
 
 // Emails that always have access regardless of access_requests table
 const ADMIN_EMAILS = ['christianbourlier@gmail.com'];
 
+// Auto-approved emails that bypass the access_requests table but are NOT admins
+const WHITELISTED_EMAILS = ['rich@myinterviewcoach.co'];
+
+const PERSONA_ACCESS: Record<string, PersonaId[]> = {
+  'christianbourlier@gmail.com': ['three-bears', 'career-coach', 'employment-seeker'],
+  'rich@myinterviewcoach.co': ['career-coach'],
+};
+
+export function getAllowedPersonas(email: string): PersonaId[] {
+  return PERSONA_ACCESS[email] ?? ['three-bears'];
+}
+
 async function isEmailApproved(email: string): Promise<boolean> {
   if (ADMIN_EMAILS.includes(email)) return true;
+  if (WHITELISTED_EMAILS.includes(email)) return true;
 
   const request = await db.query.accessRequests.findFirst({
     where: (t, { eq }) => eq(t.email, email),
