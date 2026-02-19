@@ -23,17 +23,24 @@ import { nanoid } from 'nanoid';
 import { toast } from 'sonner';
 import { saveSequencesAction } from './actions';
 
+const PERSONA_LABELS: Record<PersonaId, string> = {
+  'three-bears': 'Three Bears Data',
+  'career-coach': 'Career Coach (Rich Luby)',
+  'employment-seeker': 'Employment Seeker (Christian)',
+};
+
 interface GenerateClientProps {
   prospects: Prospect[];
+  allowedPersonas: PersonaId[];
 }
 
-function GenerateContent({ prospects }: GenerateClientProps) {
+function GenerateContent({ prospects, allowedPersonas }: GenerateClientProps) {
   const searchParams = useSearchParams();
   const preselectedIds = searchParams.get('ids')?.split(',').filter(Boolean) || [];
 
   const [selected, setSelected] = useState<Set<string>>(new Set(preselectedIds));
   const [style, setStyle] = useState<OutreachStyle>('cold');
-  const [persona, setPersona] = useState<PersonaId>('three-bears');
+  const [persona, setPersona] = useState<PersonaId>(allowedPersonas[0] ?? 'three-bears');
   const [generating, setGenerating] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [results, setResults] = useState<{
@@ -218,14 +225,18 @@ function GenerateContent({ prospects }: GenerateClientProps) {
           <div className="flex items-center gap-4">
             <div>
               <label className="text-sm font-medium">Persona</label>
-              <Select value={persona} onValueChange={(v) => setPersona(v as PersonaId)}>
+              <Select
+                value={persona}
+                onValueChange={(v) => setPersona(v as PersonaId)}
+                disabled={allowedPersonas.length === 1}
+              >
                 <SelectTrigger className="w-[200px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="three-bears">Three Bears Data</SelectItem>
-                  <SelectItem value="career-coach">Career Coach (Rich Luby)</SelectItem>
-                  <SelectItem value="employment-seeker">Employment Seeker (Christian)</SelectItem>
+                  {allowedPersonas.map((id) => (
+                    <SelectItem key={id} value={id}>{PERSONA_LABELS[id]}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -325,10 +336,10 @@ function GenerateContent({ prospects }: GenerateClientProps) {
   );
 }
 
-export function GenerateClient({ prospects }: GenerateClientProps) {
+export function GenerateClient({ prospects, allowedPersonas }: GenerateClientProps) {
   return (
     <Suspense fallback={<div className="flex items-center justify-center py-20"><p className="text-muted-foreground">Loading...</p></div>}>
-      <GenerateContent prospects={prospects} />
+      <GenerateContent prospects={prospects} allowedPersonas={allowedPersonas} />
     </Suspense>
   );
 }
