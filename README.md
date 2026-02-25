@@ -2,7 +2,7 @@
 
 AI-powered personalized LinkedIn outreach at scale. Import your connections, generate tailored multi-message sequences, and manage your entire outreach pipeline from a single dashboard.
 
-Built for B2B sales teams at [Three Bears Data](https://threebearsdata.com).
+Built for B2B sales teams managing LinkedIn outreach campaigns.
 
 ## Features
 
@@ -107,7 +107,7 @@ linkedin-outreach-web/
 │   │   ├── auth.ts                # NextAuth configuration
 │   │   ├── csv-parser.ts          # CSV parsing + deduplication
 │   │   ├── models.ts              # AI model catalog + provider routing
-│   │   ├── product-knowledge.ts   # Three Bears Data product context
+│   │   ├── product-knowledge.ts   # Configurable product context for outreach
 │   │   ├── sample-sequences.ts    # Demo mode fallback templates
 │   │   ├── templates.ts           # Prompt variable filling engine
 │   │   ├── types.ts               # TypeScript interfaces
@@ -179,5 +179,3 @@ npx drizzle-kit studio    # Open Drizzle Studio (database GUI)
 ## License
 
 MIT License. See [LICENSE](LICENSE) file for details.
-
-This is an open-source project built for [Three Bears Data](https://threebearsdata.com).
