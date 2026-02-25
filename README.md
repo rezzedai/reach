@@ -1,4 +1,4 @@
-# LinkedIn Outreach Platform
+# Reach
 
 AI-powered personalized LinkedIn outreach at scale. Import your connections, generate tailored multi-message sequences, and manage your entire outreach pipeline from a single dashboard.
 
@@ -23,12 +23,12 @@ Built for B2B sales teams at [Three Bears Data](https://threebearsdata.com).
 - **Multi-User Support** — Google OAuth with per-user data isolation and API keys
 - **Demo Mode** — Full product experience without an AI API key using pre-built sample sequences
 
-## Quick Start
+## Installation
 
 ```bash
 # 1. Clone and install
-git clone <repo-url>
-cd linkedin-outreach-web
+git clone https://github.com/rezzedai/reach.git
+cd reach
 npm install
 
 # 2. Configure environment
@@ -64,7 +64,7 @@ GOOGLE_API_KEY=                 # Required if using Gemini
 ANTHROPIC_API_KEY=              # Required if using Anthropic
 ```
 
-> Without an AI API key the platform runs in **demo mode**, using pre-built sample sequences for the full product experience.
+> **Demo Mode:** Without an AI API key, the platform runs in demo mode with pre-built sample sequences. You can explore all features — import prospects, view sequences, manage campaigns, track outreach — using realistic sample data. No real AI calls are made.
 
 ## Tech Stack
 
@@ -178,4 +178,6 @@ npx drizzle-kit studio    # Open Drizzle Studio (database GUI)
 
 ## License
 
-Private. All rights reserved.
+MIT License. See [LICENSE](LICENSE) file for details.
+
+This is an open-source project built for [Three Bears Data](https://threebearsdata.com).
