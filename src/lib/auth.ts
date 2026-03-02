@@ -3,7 +3,7 @@ import Google from 'next-auth/providers/google';
 import { DrizzleAdapter } from '@auth/drizzle-adapter';
 import { db } from '@/lib/db';
 import { users, accounts, sessions, verificationTokens, accessRequests } from '@/lib/db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import type { PersonaId } from '@/lib/sample-sequences';
 
@@ -28,6 +28,7 @@ async function isEmailApproved(email: string): Promise<boolean> {
 
   const request = await db.query.accessRequests.findFirst({
     where: (t, { eq }) => eq(t.email, email),
+    orderBy: (t) => desc(t.createdAt),
   });
 
   return request?.status === 'approved';
@@ -46,24 +47,39 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   events: {
     async createUser({ user }) {
       if (user.id) {
-        await db
-          .update(users)
-          .set({ apiKey: `key_${nanoid(32)}` })
-          .where(eq(users.id, user.id));
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            await db
+              .update(users)
+              .set({ apiKey: `key_${nanoid(32)}` })
+              .where(eq(users.id, user.id));
+            return;
+          } catch (err) {
+            console.error(`API key generation attempt ${attempt + 1} failed for user ${user.id}:`, err);
+            if (attempt === 2) {
+              console.error(`API key generation failed permanently for user ${user.id}. User will need manual key provisioning.`);
+            }
+          }
+        }
       }
     },
   },
   callbacks: {
     async signIn({ user }) {
-      const email = user.email;
-      if (!email) return '/request-access';
+      try {
+        const email = user.email;
+        if (!email) return '/request-access';
 
-      const approved = await isEmailApproved(email);
-      if (!approved) {
-        return '/request-access?blocked=1';
+        const approved = await isEmailApproved(email);
+        if (!approved) {
+          return '/request-access?blocked=1';
+        }
+
+        return true;
+      } catch (err) {
+        console.error('Sign-in approval check failed:', err);
+        return '/request-access?error=auth_check_failed';
       }
-
-      return true;
     },
     async session({ session, user }) {
       session.user.id = user.id;
